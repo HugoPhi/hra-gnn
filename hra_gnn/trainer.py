@@ -168,6 +168,8 @@ class Trainer:
             cut = max(1, min(len(shuffled) - 1, round(len(shuffled) * fraction)))
             validation.extend(shuffled[:cut].tolist())
             test.extend(shuffled[cut:].tolist())
+        rng.shuffle(validation)
+        rng.shuffle(test)
         self.splits["monitor_validation"] = validation
         self.splits["monitor_test"] = test
 
