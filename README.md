@@ -306,9 +306,43 @@ evaluation:
 
 详细恢复依据见 [评分公式恢复证据](doc/评分公式恢复证据.md)。
 
+## TensorBoard 训练监控
+
+启用逐 epoch 监控：
+
+```bash
+.venv/bin/python run.py train \
+  --config configs/tracelog.yaml \
+  --set monitoring.enabled=true \
+  --set output.run_name=monitor_tracelog
+```
+
+启动面板：
+
+```bash
+.venv/bin/tensorboard \
+  --logdir artifacts/tensorboard \
+  --host 127.0.0.1 \
+  --port 6006
+```
+
+面板按数据集分别提供三个自定义图，每张图只有两条线：
+
+- `SVDD Loss: train/test`：训练 batch 的平均 SVDD 损失与监控测试集平均 SVDD 距离；
+- `AUC: validation/test`：监控验证集与监控测试集 AUC；
+- `AP: validation/test`：监控验证集与监控测试集 AP。
+
+训练集只包含正常图，真实 `train AUC/AP` 在数学上没有定义，所以不能伪造
+`train/test AUC/AP` 曲线。TraceLog 使用现有 validation/test；FlowGraph 没有官方
+验证文件，监控模块将官方评估集按标签固定拆成互斥的 validation/test 视图。该拆分只用于
+诊断曲线，不改变训练数据、早停规则或最终完整测试集指标。
+
+逐 epoch 测试曲线可能导致人工测试集调参，因此只能用于诊断，不得据此选择模型。正式
+论文结果仍以早停规则选出的 `best.pt` 在完整测试集上的一次评估为准。
+
 ## 当前验证结果
 
-- 29 项自动化测试通过。
+- 30 项自动化测试通过。
 - Ruff 静态检查通过。
 - Python 编译检查通过。
 - 合成数据的训练、评估、实验聚合和所有绘图入口通过。

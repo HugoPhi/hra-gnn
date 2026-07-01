@@ -55,6 +55,15 @@ evaluation:
   score_ssl_weight: 0.10
   collect_diagnostics: false
 
+monitoring:
+  enabled: false
+  log_dir: artifacts/tensorboard
+  flush_seconds: 10
+  # FlowGraph has no provided validation file. Monitoring only splits its
+  # evaluation set into disjoint validation/test views; final evaluation still
+  # uses the complete official test split.
+  validation_fraction_from_test: 0.50
+
 output:
   results_root: artifacts/results
   figures_root: artifacts/figures

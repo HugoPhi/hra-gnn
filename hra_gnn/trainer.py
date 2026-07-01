@@ -10,6 +10,7 @@ import pandas as pd
 import psutil
 import torch
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 
 from .augment import HeterogeneousAugmentor
 from .baselines import DeepTraLogBaseline, GLocalKDBaseline, HGTBaseline
@@ -119,6 +120,8 @@ class Trainer:
                 ),
                 seed=self.seed,
             )
+        self.monitoring = config.get("monitoring", {})
+        self._configure_monitor_splits()
         self.model = build_model(config).to(self.device)
         self.augmentor = build_augmentor(config, self.seed)
         self.output_dir = result_directory(config, self.seed)
@@ -136,6 +139,67 @@ class Trainer:
         self.ssl_enabled = bool(config.get("ssl", {}).get("enabled", True))
         self.ssl_loss_weight = float(config.get("ssl", {}).get("loss_weight", 0.1))
         self.bce = nn.BCEWithLogitsLoss()
+        self.writer = self._build_summary_writer()
+
+    def _label_for_index(self, index: int) -> int:
+        if hasattr(self.dataset, "labels") and hasattr(self.dataset, "graph_ids"):
+            graph_id = self.dataset.graph_ids[index]
+            return int(self.dataset.labels[graph_id])
+        return int(self.dataset[index].label)
+
+    def _configure_monitor_splits(self) -> None:
+        if not bool(self.monitoring.get("enabled", False)):
+            return
+        if self.splits["validation"]:
+            self.splits["monitor_validation"] = list(self.splits["validation"])
+            self.splits["monitor_test"] = list(self.splits["test"])
+            return
+
+        rng = np.random.default_rng(self.seed)
+        fraction = float(self.monitoring.get("validation_fraction_from_test", 0.5))
+        validation: list[int] = []
+        test: list[int] = []
+        by_label: dict[int, list[int]] = {}
+        for index in self.splits["test"]:
+            by_label.setdefault(self._label_for_index(index), []).append(index)
+        for values in by_label.values():
+            shuffled = np.asarray(values)
+            rng.shuffle(shuffled)
+            cut = max(1, min(len(shuffled) - 1, round(len(shuffled) * fraction)))
+            validation.extend(shuffled[:cut].tolist())
+            test.extend(shuffled[cut:].tolist())
+        self.splits["monitor_validation"] = validation
+        self.splits["monitor_test"] = test
+
+    def _build_summary_writer(self) -> SummaryWriter | None:
+        if not bool(self.monitoring.get("enabled", False)):
+            return None
+        root = Path(self.monitoring.get("log_dir", "artifacts/tensorboard"))
+        dataset_name = self.config["dataset"]["name"]
+        run_name = self.config["output"].get("run_name", "hra_full")
+        writer = SummaryWriter(
+            root / dataset_name / run_name / f"seed_{self.seed}",
+            flush_secs=int(self.monitoring.get("flush_seconds", 10)),
+        )
+        writer.add_custom_scalars(
+            {
+                dataset_name: {
+                    "SVDD Loss: train/test": [
+                        "Multiline",
+                        ["Loss/train", "Loss/test"],
+                    ],
+                    "AUC: validation/test": [
+                        "Multiline",
+                        ["AUC/validation", "AUC/test"],
+                    ],
+                    "AP: validation/test": [
+                        "Multiline",
+                        ["AP/validation", "AP/test"],
+                    ],
+                }
+            }
+        )
+        return writer
 
     def _sync(self) -> None:
         if self.device.type == "cuda":
@@ -226,6 +290,7 @@ class Trainer:
             return {
                 "auc": math.nan,
                 "ap": math.nan,
+                "mean_svdd_loss": math.nan,
                 "num_graphs": 0,
                 "mean_inference_seconds": math.nan,
             }
@@ -322,6 +387,9 @@ class Trainer:
             svdd_metrics = anomaly_metrics(labels, finite_svdd)
             metrics["svdd_auc"] = svdd_metrics["auc"]
             metrics["svdd_ap"] = svdd_metrics["ap"]
+            metrics["mean_svdd_loss"] = float(np.mean(finite_svdd))
+        else:
+            metrics["mean_svdd_loss"] = math.nan
         ssl_metrics = anomaly_metrics(
             labels, [row["ssl_anomaly_score"] for row in rows]
         )
@@ -401,8 +469,47 @@ class Trainer:
                     self._save_checkpoint("best.pt", epoch)
                 else:
                     stale_epochs += 1
+                if self.writer is not None:
+                    monitor_validation = (
+                        validation
+                        if self.splits["monitor_validation"]
+                        == self.splits["validation"]
+                        else self.evaluate("monitor_validation")
+                    )
+                    monitor_test = self.evaluate("monitor_test")
+                    row["monitor_validation_auc"] = monitor_validation["auc"]
+                    row["monitor_validation_ap"] = monitor_validation["ap"]
+                    row["monitor_test_auc"] = monitor_test["auc"]
+                    row["monitor_test_ap"] = monitor_test["ap"]
+                    row["monitor_test_svdd_loss"] = monitor_test["mean_svdd_loss"]
+                    self.writer.add_scalar("Loss/train", row["svdd_loss"], epoch)
+                    self.writer.add_scalar(
+                        "Loss/test", monitor_test["mean_svdd_loss"], epoch
+                    )
+                    self.writer.add_scalar(
+                        "AUC/validation", monitor_validation["auc"], epoch
+                    )
+                    self.writer.add_scalar("AUC/test", monitor_test["auc"], epoch)
+                    self.writer.add_scalar(
+                        "AP/validation", monitor_validation["ap"], epoch
+                    )
+                    self.writer.add_scalar("AP/test", monitor_test["ap"], epoch)
+                    self.writer.flush()
             history.append(row)
             pd.DataFrame(history).to_csv(history_path, index=False)
+            progress = (
+                f"[{self.config['dataset']['name']}] epoch={epoch} "
+                f"loss={row['loss']:.6f} svdd={row['svdd_loss']:.6f} "
+                f"ssl={row['ssl_loss']:.6f} seconds={row['epoch_seconds']:.1f}"
+            )
+            if "monitor_test_auc" in row:
+                progress += (
+                    f" val_auc={row['monitor_validation_auc']:.4f}"
+                    f" val_ap={row['monitor_validation_ap']:.4f}"
+                    f" test_auc={row['monitor_test_auc']:.4f}"
+                    f" test_ap={row['monitor_test_ap']:.4f}"
+                )
+            print(progress, flush=True)
             if stale_epochs >= patience:
                 break
 
@@ -431,6 +538,8 @@ class Trainer:
             "device": str(self.device),
         }
         write_json(summary, self.output_dir / "metrics.json")
+        if self.writer is not None:
+            self.writer.close()
         return summary
 
 

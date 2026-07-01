@@ -17,6 +17,7 @@ dependencies = [
   "seaborn>=0.13",
   "psutil>=5.9",
   "olefile>=0.47",
+  "tensorboard>=2.16",
 ]
 
 [project.optional-dependencies]
