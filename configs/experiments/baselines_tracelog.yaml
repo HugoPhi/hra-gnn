@@ -1,0 +1,45 @@
+name: baselines_tracelog
+base_config: ../tracelog.yaml
+seeds: [11, 22, 33, 44, 55]
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  GLocalKD:
+    model:
+      architecture: glocalkd
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HGT:
+    model:
+      architecture: hgt
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  DeepTraLog:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HRGCN:
+    model:
+      architecture: hrgcn
+      relation_fusion: static_concat
+      readout: max
+  HRA-GNN:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid

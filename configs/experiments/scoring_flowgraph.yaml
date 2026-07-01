@@ -1,0 +1,21 @@
+name: scoring_flowgraph
+base_config: ../flowgraph.yaml
+seeds: [11, 22, 33, 44, 55]
+
+variants:
+  paper_product:
+    evaluation:
+      score_mode: paper_product
+  svdd:
+    evaluation:
+      score_mode: svdd
+  ssl:
+    evaluation:
+      score_mode: ssl
+  product:
+    evaluation:
+      score_mode: product
+  weighted_sum:
+    evaluation:
+      score_mode: weighted_sum
+      score_ssl_weight: 0.21

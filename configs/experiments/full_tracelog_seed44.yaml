@@ -1,0 +1,7 @@
+name: full_tracelog
+base_config: ../tracelog.yaml
+seeds: [44]
+
+variants:
+  HRA-GNN:
+    {}

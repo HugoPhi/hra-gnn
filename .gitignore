@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
 
 # C extensions
 *.so
@@ -127,6 +128,17 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Downloaded datasets and generated experiment artifacts
+data/*
+!data/ProcessedData_FlowGraph/
+!data/ProcessedData_TraceLog/
+data/ProcessedData_FlowGraph/*
+data/ProcessedData_TraceLog/*
+!data/ProcessedData_FlowGraph/.gitkeep
+!data/ProcessedData_TraceLog/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
 
 # Spyder project settings
 .spyderproject

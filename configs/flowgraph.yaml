@@ -1,0 +1,37 @@
+extends: base.yaml
+
+dataset:
+  name: FlowGraph
+  root: data/ProcessedData_FlowGraph
+  feature_dim: 26
+  num_node_types: 8
+  # The released edge_index.csv has no edge_type column. The 26 event codes
+  # are node attributes, so the executable representation uses one edge type.
+  num_edge_types: 1
+  split:
+    mode: provided
+    train_file: model_gid_list_train.txt
+    validation_file: null
+    test_file: model_gid_list_eval.txt
+
+model:
+  hidden_dim: 32
+  output_dim: 32
+  num_layers: 2
+
+augmentation:
+  methods:
+    - edge_addition
+    - node_type_swap
+  edge_addition_rate: 0.39
+  node_type_swap_rate: 0.52
+
+ssl:
+  loss_weight: 0.21
+
+evaluation:
+  score_ssl_weight: 0.21
+
+training:
+  batch_size: 4
+  learning_rate: 0.01

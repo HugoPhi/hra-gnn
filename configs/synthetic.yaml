@@ -1,0 +1,39 @@
+extends: base.yaml
+
+dataset:
+  name: Synthetic
+  kind: synthetic
+  num_graphs: 48
+  anomaly_ratio: 0.25
+  feature_dim: 7
+  num_node_types: 3
+  num_edge_types: 2
+  seed: 7
+  split:
+    train_normal_ratio: 0.60
+    validation_normal_ratio: 0.20
+    validation_anomaly_ratio: 0.50
+
+model:
+  hidden_dim: 16
+  output_dim: 16
+  num_layers: 2
+
+augmentation:
+  edge_perturbation_rate: 0.20
+  edge_addition_rate: 0.20
+  node_type_swap_rate: 0.20
+  edge_type_swap_rate: 0.20
+
+ssl:
+  loss_weight: 0.10
+
+training:
+  device: cpu
+  epochs: 3
+  batch_size: 4
+  learning_rate: 0.001
+  early_stopping_patience: 3
+
+output:
+  run_name: smoke

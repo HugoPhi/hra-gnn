@@ -1,0 +1,47 @@
+name: smoke
+base_config: ../synthetic.yaml
+seeds: [3]
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  GLocalKD:
+    model:
+      architecture: glocalkd
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HGT:
+    model:
+      architecture: hgt
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  DeepTraLog:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HRGCN:
+    model:
+      architecture: hrgcn
+      relation_fusion: static_concat
+      readout: max
+  HRA-GNN:
+    {}
+
+sweeps:
+  - name: deviation_weight
+    parameter: model.deviation_weight
+    values: [0.5, 1.0]

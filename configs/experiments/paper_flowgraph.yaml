@@ -1,0 +1,34 @@
+name: paper_flowgraph
+base_config: ../flowgraph.yaml
+seeds: [11, 22, 33, 44, 55]
+
+variants:
+  static_concat:
+    model:
+      relation_fusion: static_concat
+      readout: hybrid
+  dynamic_attention:
+    model:
+      relation_fusion: semantic_attention
+      readout: hybrid
+  only_max_pooling:
+    model:
+      relation_fusion: deviation_attention
+      readout: max
+  only_mean_pooling:
+    model:
+      relation_fusion: deviation_attention
+      readout: mean
+  without_ssl:
+    ssl:
+      enabled: false
+  full:
+    {}
+
+sweeps:
+  - name: hidden_dimension
+    parameter: model.hidden_dim
+    values: [16, 32, 64, 128, 256]
+  - name: deviation_weight
+    parameter: model.deviation_weight
+    values: [0.1, 0.5, 1.0, 2.0, 5.0]

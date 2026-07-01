@@ -1,0 +1,61 @@
+dataset:
+  name: dataset
+  kind: csv
+  root: data/ProcessedData
+  feature_dim: 7
+  num_node_types: 8
+  num_edge_types: 1
+  cache_graphs: false
+  split:
+    train_normal_ratio: 0.60
+    validation_normal_ratio: 0.20
+    validation_anomaly_ratio: 0.0
+
+model:
+  hidden_dim: 128
+  output_dim: 128
+  num_layers: 2
+  relation_fusion: deviation_attention
+  deviation_weight: 1.0
+  attention_temperature: 1.0
+  prototype_momentum: 0.9
+  prototype_min_scale: 0.001
+  readout: hybrid
+  dropout: 0.1
+
+augmentation:
+  methods:
+    - edge_perturbation
+    - edge_addition
+    - node_type_swap
+    - edge_type_swap
+  edge_perturbation_rate: 0.10
+  edge_addition_rate: 0.10
+  node_type_swap_rate: 0.10
+  edge_type_swap_rate: 0.10
+  preserve_observed_schema: true
+
+ssl:
+  enabled: true
+  loss_weight: 0.10
+
+training:
+  seed: 42
+  device: auto
+  epochs: 100
+  batch_size: 8
+  learning_rate: 0.0001
+  weight_decay: 0.000001
+  gradient_clip: 5.0
+  evaluate_every: 1
+  early_stopping_patience: 10
+
+evaluation:
+  score_mode: paper_product
+  score_ssl_weight: 0.10
+  collect_diagnostics: false
+
+output:
+  results_root: artifacts/results
+  figures_root: artifacts/figures
+  run_name: hra_full

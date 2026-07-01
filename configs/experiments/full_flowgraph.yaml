@@ -1,0 +1,7 @@
+name: full_flowgraph
+base_config: ../flowgraph.yaml
+seeds: [11, 22, 33, 44, 55]
+
+variants:
+  HRA-GNN:
+    {}

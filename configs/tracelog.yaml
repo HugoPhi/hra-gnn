@@ -1,0 +1,34 @@
+extends: base.yaml
+
+dataset:
+  name: TraceLog
+  root: data/ProcessedData_TraceLog
+  feature_dim: 7
+  num_node_types: 8
+  num_edge_types: 4
+  split:
+    mode: provided
+    train_file: model_gid_list_train.txt
+    validation_file: model_gid_list_eval.txt
+    test_file: model_gid_list_test.txt
+
+model:
+  hidden_dim: 128
+  output_dim: 128
+  num_layers: 2
+
+augmentation:
+  edge_perturbation_rate: 0.13
+  edge_addition_rate: 0.13
+  node_type_swap_rate: 0.10
+  edge_type_swap_rate: 0.18
+
+ssl:
+  loss_weight: 0.001
+
+evaluation:
+  score_ssl_weight: 0.001
+
+training:
+  batch_size: 8
+  learning_rate: 0.0001

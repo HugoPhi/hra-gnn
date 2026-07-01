@@ -1,0 +1,13 @@
+dataset,variant,auc_mean,ap_mean
+TraceLog,Static Concat,0.787,0.655
+TraceLog,Dynamic Attention,0.833,0.721
+TraceLog,Only Max-Pooling,0.841,0.738
+TraceLog,Only Mean-Pooling,0.822,0.724
+TraceLog,w/o SSL,0.835,0.729
+TraceLog,Ours (Full),0.863,0.765
+FlowGraph,Static Concat,0.927,0.897
+FlowGraph,Dynamic Attention,0.965,0.921
+FlowGraph,Only Max-Pooling,0.962,0.935
+FlowGraph,Only Mean-Pooling,0.971,0.959
+FlowGraph,w/o SSL,0.978,0.969
+FlowGraph,Ours (Full),1.000,1.000
