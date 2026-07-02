@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,6 +24,14 @@ def _official_module(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _official_module_with_path(path: Path, name: str):
+    sys.path.insert(0, str(path.parent))
+    try:
+        return _official_module(path, name)
+    finally:
+        sys.path.pop(0)
 
 
 def _splits(config: dict[str, Any], dataset) -> dict[str, list[int]]:
@@ -165,6 +174,19 @@ def _contrastive_losses(outputs, batch, temperature=0.2):
         + torch.log(node_positive / node_negative_rows + 1e-12)
     )
     return graph_loss, global_mean_pool(node_loss, batch)
+
+
+def _signet_loss(left, right, temperature=0.2):
+    left = torch.nn.functional.normalize(left, dim=1, eps=1e-12)
+    right = torch.nn.functional.normalize(right, dim=1, eps=1e-12)
+    similarities = torch.exp((left @ right.T / temperature).clamp(max=50.0))
+    positive = similarities.diag()
+    negative_columns = (similarities.sum(dim=0) - positive).clamp_min(1e-12)
+    negative_rows = (similarities.sum(dim=1) - positive).clamp_min(1e-12)
+    return -0.5 * (
+        torch.log(positive / negative_columns + 1e-12)
+        + torch.log(positive / negative_rows + 1e-12)
+    )
 
 
 def _score_loader(model, loader, device, args, mamba, statistics):
@@ -411,6 +433,174 @@ def run_dual_view_fair(
         "checkpoint_selection": "fixed_epoch",
         "threshold_source": "normal_train_scores",
         "official_source": str(Path(external_root) / official_name),
+        "train_graphs": len(train_labels),
+        "numerically_stabilized": True,
+    }
+    (output / "metrics.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return summary
+
+
+def run_signet_fair(
+    config: dict[str, Any], *, external_root: str | Path = "external"
+) -> dict[str, Any]:
+    try:
+        from torch_geometric.data import Data
+        from torch_geometric.loader import DataLoader
+    except ImportError as exc:
+        raise RuntimeError(
+            "SIGNET requires requirements-baselines.txt"
+        ) from exc
+
+    baseline = config.get("recent_baseline", {})
+    seed = int(config["training"].get("seed", 42))
+    seed_everything(seed)
+    device = resolve_device(config["training"].get("device", "auto"))
+    dataset = load_dataset(config["dataset"])
+    dataset_splits = _limited_splits(
+        dataset,
+        _splits(config, dataset),
+        baseline.get("max_graphs_per_split"),
+    )
+    selected = sorted(
+        {index for values in dataset_splits.values() for index in values}
+    )
+    graphs = {}
+    for index in selected:
+        source = dataset[index]
+        graphs[index] = Data(
+            x=source.x.float(),
+            edge_index=source.edge_index.long(),
+            edge_attr=None,
+            edge_type=source.edge_type.long(),
+            y=torch.tensor([source.label], dtype=torch.long),
+            graph_id=torch.tensor([source.graph_id], dtype=torch.long),
+        )
+    batch_size = int(config["training"].get("batch_size", 32))
+    if batch_size < 2:
+        raise ValueError("SIGNET needs batch_size >= 2 for contrastive negatives")
+    train_graphs = [graphs[index] for index in dataset_splits["train"]]
+    test_graphs = [graphs[index] for index in dataset_splits["test"]]
+    train_loader = DataLoader(
+        train_graphs,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+    train_eval_loader = _evaluation_loader(train_graphs, batch_size)
+    test_loader = _evaluation_loader(
+        test_graphs,
+        int(config["evaluation"].get("batch_size", batch_size)),
+    )
+
+    module = _official_module_with_path(
+        Path(external_root) / "SIGNET" / "main.py",
+        f"official_signet_{seed}",
+    )
+    arguments = SimpleNamespace(
+        hidden_dim=int(baseline.get("hidden_dim", 16)),
+        encoder_layers=int(baseline.get("num_layers", 5)),
+        pooling=baseline.get("pooling", "add"),
+        readout=baseline.get("readout", "concat"),
+        explainer_model=baseline.get("explainer_model", "gin"),
+        explainer_hidden_dim=int(baseline.get("explainer_hidden_dim", 8)),
+        explainer_layers=int(baseline.get("explainer_layers", 5)),
+        explainer_readout=baseline.get("explainer_readout", "add"),
+    )
+    model = module.SIGNET(
+        int(train_graphs[0].x.shape[1]), 0, arguments, device
+    ).to(device)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=float(config["training"].get("learning_rate", 1e-4)),
+    )
+    epochs = int(config["training"].get("epochs", 100))
+    history = []
+    training_start = time.perf_counter()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+    for epoch in range(1, epochs + 1):
+        model.train()
+        started = time.perf_counter()
+        total = 0.0
+        count = 0
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+            left, right, _, _ = model(data)
+            loss = _signet_loss(left, right).mean()
+            loss.backward()
+            optimizer.step()
+            total += float(loss.detach()) * data.num_graphs
+            count += data.num_graphs
+        history.append(
+            {
+                "epoch": epoch,
+                "loss": total / max(count, 1),
+                "epoch_seconds": time.perf_counter() - started,
+            }
+        )
+        print(
+            f"[SIGNET-fair] epoch={epoch} loss={history[-1]['loss']:.6f}",
+            flush=True,
+        )
+
+    def score(loader):
+        labels, scores, graph_ids = [], [], []
+        model.eval()
+        with torch.no_grad():
+            for data in loader:
+                data = data.to(device)
+                left, right, _, _ = model(data)
+                values = _signet_loss(left, right)
+                labels.extend(data.y.reshape(-1).cpu().tolist())
+                scores.extend(values.cpu().tolist())
+                graph_ids.extend(data.graph_id.reshape(-1).cpu().tolist())
+        return labels, scores, graph_ids
+
+    training_seconds = time.perf_counter() - training_start
+    train_labels, train_scores, _ = score(train_eval_loader)
+    threshold = normal_score_threshold(
+        train_scores,
+        float(config["evaluation"].get("threshold_quantile", 0.99)),
+    )
+    labels, scores, graph_ids = score(test_loader)
+    metrics = anomaly_metrics(
+        labels,
+        scores,
+        threshold=threshold,
+        alert_fraction=float(config["evaluation"].get("alert_fraction", 0.01)),
+        target_fpr=float(config["evaluation"].get("target_fpr", 0.01)),
+    )
+    output = (
+        Path(config["output"].get("results_root", "artifacts/results"))
+        / config["dataset"]["name"]
+        / "SIGNET-fair"
+        / f"seed_{seed}"
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(history).to_csv(output / "history.csv", index=False)
+    pd.DataFrame(
+        {"graph_id": graph_ids, "label": labels, "score": scores}
+    ).to_csv(output / "test_predictions.csv", index=False)
+    summary = {
+        **metrics,
+        "dataset": config["dataset"]["name"],
+        "variant": "SIGNET-fair",
+        "seed": seed,
+        "epochs_completed": epochs,
+        "training_seconds": training_seconds,
+        "parameters": parameter_count(model),
+        "peak_gpu_memory_mb": (
+            torch.cuda.max_memory_allocated(device) / (1024**2)
+            if device.type == "cuda"
+            else 0.0
+        ),
+        "device": str(device),
+        "checkpoint_selection": "fixed_epoch",
+        "threshold_source": "normal_train_scores",
+        "official_source": str(Path(external_root) / "SIGNET"),
         "train_graphs": len(train_labels),
         "numerically_stabilized": True,
     }
