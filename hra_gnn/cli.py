@@ -73,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="auc",
         help="metric used to select a run when --aggregation=best",
     )
+    table.add_argument(
+        "--highlight-ranks",
+        action="store_true",
+        help="bold the best and underline the second distinct value per dataset",
+    )
 
     prepare = subparsers.add_parser("prepare-data")
     prepare.add_argument("--kind", required=True, choices=("hdfs", "adfa-ld"))
@@ -182,6 +187,7 @@ def main() -> None:
             summary,
             arguments.output,
             metrics=arguments.metrics,
+            highlight_ranks=arguments.highlight_ranks,
         )
         print(f"Wrote {output.resolve()}")
     elif arguments.command == "prepare-data":

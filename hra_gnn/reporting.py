@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Iterable
 
@@ -126,6 +127,7 @@ def write_latex_table(
     metrics: Iterable[str] = DEFAULT_METRICS,
     caption: str = "不同模型在多个数据集上的异常检测结果",
     label: str = "tab:multi_dataset_results",
+    highlight_ranks: bool = False,
 ) -> Path:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +172,12 @@ def write_latex_table(
         subset = summary[summary["dataset"] == dataset].sort_values("method")
         methods = subset["method"].tolist()
         indexed = subset.set_index("method")
+        rank_values = {}
+        if highlight_ranks:
+            for metric in metrics:
+                suffix = "best" if best_mode else "mean"
+                values = subset[f"{metric}_{suffix}"].dropna().astype(float)
+                rank_values[metric] = sorted(set(values.tolist()), reverse=True)[:2]
         for method_index, method in enumerate(methods):
             dataset_cell = (
                 rf"\multirow{{{len(methods)}}}{{*}}{{{_escape(dataset)}}}"
@@ -181,7 +189,18 @@ def write_latex_table(
             for metric in metrics:
                 if best_mode:
                     best = values[f"{metric}_best"]
-                    row.append("--" if pd.isna(best) else f"{best:.4f}")
+                    formatted = "--" if pd.isna(best) else f"{best:.4f}"
+                    if not pd.isna(best) and highlight_ranks:
+                        ranks = rank_values[metric]
+                        if ranks and math.isclose(
+                            float(best), ranks[0], rel_tol=0.0, abs_tol=1e-12
+                        ):
+                            formatted = rf"\textbf{{{formatted}}}"
+                        elif len(ranks) > 1 and math.isclose(
+                            float(best), ranks[1], rel_tol=0.0, abs_tol=1e-12
+                        ):
+                            formatted = rf"\underline{{{formatted}}}"
+                    row.append(formatted)
                     continue
                 mean = values[f"{metric}_mean"]
                 std = values[f"{metric}_std"]

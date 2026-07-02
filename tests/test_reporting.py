@@ -123,3 +123,26 @@ def test_display_names_drop_protocol_suffixes_and_note_adaptations(
     assert "-reimplemented" not in text
     assert "统一 GraphSample 版本" in text
     assert "MUSE 因稠密邻接复杂度未在 FlowGraph 上运行" in text
+
+
+def test_best_and_second_best_are_highlighted_per_dataset(tmp_path: Path) -> None:
+    source = tmp_path / "runs.csv"
+    pd.DataFrame(
+        [
+            {"dataset": "HDFS", "variant": "A", "auc": 0.9, "ap": 0.7},
+            {"dataset": "HDFS", "variant": "B", "auc": 0.8, "ap": 0.9},
+            {"dataset": "HDFS", "variant": "C", "auc": 0.7, "ap": 0.8},
+        ]
+    ).to_csv(source, index=False)
+    summary = summarize_runs([source], ["auc", "ap"], aggregation="best")
+    output = write_latex_table(
+        summary,
+        tmp_path / "ranked.tex",
+        metrics=["auc", "ap"],
+        highlight_ranks=True,
+    )
+    text = output.read_text(encoding="utf-8")
+
+    assert r"A & \textbf{0.9000} & 0.7000" in text
+    assert r"B & \underline{0.8000} & \textbf{0.9000}" in text
+    assert r"C & 0.7000 & \underline{0.8000}" in text

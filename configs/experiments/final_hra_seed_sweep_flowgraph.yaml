@@ -1,0 +1,19 @@
+name: final_hra_seed_sweep_flowgraph
+base_config: ../flowgraph.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+
+common:
+  experiment:
+    stage: exploratory_seed_sweep_test_selected
+  training:
+    epochs: 15
+    early_stopping_patience: 4
+  evaluation:
+    sampling: seeded_stratified
+
+variants:
+  HRA-GNN:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
