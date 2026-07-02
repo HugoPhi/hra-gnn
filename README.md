@@ -288,7 +288,8 @@ checkpoint 由无标签验证 SVDD 损失选择，AUC/AP 仅用于监控。
 当前论文主表按 AUROC 选择每个模型、每个数据集的最佳真实运行，并报告该运行
 对应的全部指标，不跨 seed 拼接各列。各 seed 原始结果仍保留在 `runs.csv`。
 
-生成的表使用 `booktabs`、`graphicx` 和 `rotating`。
+生成的表按“数据集、模型、指标”组织，使用 `booktabs`、`graphicx` 和
+`multirow`。
 
 ## 官方近期 Baseline
 

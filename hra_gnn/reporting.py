@@ -27,13 +27,31 @@ DISPLAY_NAMES = {
 }
 
 METHOD_ALIASES = {
-    "DeepTraLog": "DeepTraLog-reimplemented",
-    "DeepTraLog-adapted": "DeepTraLog-reimplemented",
-    "GLocalKD": "GLocalKD-reimplemented",
-    "GLocalKD-adapted": "GLocalKD-reimplemented",
-    "HGT": "HGT-reimplemented",
-    "OCHetGCN": "OCHetGCN-reimplemented",
+    "DeepTraLog-adapted": "DeepTraLog",
+    "DeepTraLog-reimplemented": "DeepTraLog",
+    "GLocalKD-adapted": "GLocalKD",
+    "GLocalKD-reimplemented": "GLocalKD",
+    "HGT-reimplemented": "HGT",
+    "OCHetGCN-reimplemented": "OCHetGCN",
+    "SIGNET-fair": "SIGNET",
+    "CVTGAD-fair": "CVTGAD",
+    "MUSE-fair": "MUSE",
+    "GLADMamba-fair": "GLADMamba",
 }
+
+PREFERRED_DATASET_ORDER = ("TraceLog", "FlowGraph", "HDFS", "ADFA-LD")
+
+TABLE_ADAPTATION_NOTE = (
+    "说明：所有方法沿用本项目预定义的数据划分、节点特征和评测指标；仅使用正常"
+    "训练图进行单类学习，F1/MCC 的阈值由正常训练分数的 99% 分位数确定。"
+    "SIGNET、CVTGAD、MUSE 和 GLADMamba 基于官方实现接入统一划分与固定正常"
+    "参考评分；DeepTraLog、GLocalKD、HGT 和 OCHetGCN 为依据论文机制实现的"
+    "统一 GraphSample 版本。ADFA-LD 使用 edge-only 关系模式控制高基数系统"
+    "调用类型带来的关系规模。MUSE 因稠密邻接复杂度未在 FlowGraph 上运行。"
+    "表中按 AUROC 选择最佳运行，其他指标均取自同一随机种子。本表汇总第一轮"
+    "阶段性实验，旧直接基线与近期方法的受控采样上限尚未完全统一，最终公平主表"
+    "需在统一预算下重跑。"
+)
 
 
 def _escape(value: object) -> str:
@@ -111,7 +129,13 @@ def write_latex_table(
 ) -> Path:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    datasets = summary["dataset"].drop_duplicates().tolist()
+    observed_datasets = summary["dataset"].drop_duplicates().tolist()
+    datasets = [
+        dataset for dataset in PREFERRED_DATASET_ORDER if dataset in observed_datasets
+    ]
+    datasets.extend(
+        sorted(dataset for dataset in observed_datasets if dataset not in datasets)
+    )
     best_mode = any(f"{metric}_best" in summary for metric in metrics)
     metrics = [
         metric
@@ -122,48 +146,38 @@ def write_latex_table(
             else f"{metric}_mean" in summary and f"{metric}_std" in summary
         )
     ]
-    columns = "l" + "c" * (len(datasets) * len(metrics))
+    columns = "ll" + "c" * len(metrics)
     lines = [
-        r"% 需要 \usepackage{booktabs,graphicx,rotating}",
-        r"\begin{sidewaystable*}[t]",
+        r"% 需要 \usepackage{booktabs,graphicx,multirow}",
+        r"\begin{table*}[t]",
         r"\centering",
-        r"\small",
+        r"\scriptsize",
+        r"\renewcommand{\arraystretch}{0.92}",
+        r"\setlength{\tabcolsep}{3pt}",
         rf"\caption{{{caption}}}",
         rf"\label{{{label}}}",
         r"\resizebox{\textwidth}{!}{%",
         rf"\begin{{tabular}}{{{columns}}}",
         r"\toprule",
     ]
-    first_header = ["模型"]
-    for dataset in datasets:
-        first_header.append(
-            rf"\multicolumn{{{len(metrics)}}}{{c}}{{{_escape(dataset)}}}"
-        )
-    lines.append(" & ".join(first_header) + r" \\")
-    cmidrules = []
-    start = 2
-    for _ in datasets:
-        end = start + len(metrics) - 1
-        cmidrules.append(rf"\cmidrule(lr){{{start}-{end}}}")
-        start = end + 1
-    lines.append(" ".join(cmidrules))
-    second_header = [""] + [
-        DISPLAY_NAMES.get(metric, _escape(metric))
-        for _dataset in datasets
-        for metric in metrics
+    header = ["数据集", "模型"] + [
+        DISPLAY_NAMES.get(metric, _escape(metric)) for metric in metrics
     ]
-    lines.append(" & ".join(second_header) + r" \\")
+    lines.append(" & ".join(header) + r" \\")
     lines.append(r"\midrule")
 
-    methods = summary["method"].drop_duplicates().tolist()
-    indexed = summary.set_index(["method", "dataset"])
-    for method in methods:
-        row = [_escape(method)]
-        for dataset in datasets:
-            if (method, dataset) not in indexed.index:
-                row.extend(["--"] * len(metrics))
-                continue
-            values = indexed.loc[(method, dataset)]
+    for dataset_index, dataset in enumerate(datasets):
+        subset = summary[summary["dataset"] == dataset].sort_values("method")
+        methods = subset["method"].tolist()
+        indexed = subset.set_index("method")
+        for method_index, method in enumerate(methods):
+            dataset_cell = (
+                rf"\multirow{{{len(methods)}}}{{*}}{{{_escape(dataset)}}}"
+                if method_index == 0
+                else ""
+            )
+            row = [dataset_cell, _escape(method)]
+            values = indexed.loc[method]
             for metric in metrics:
                 if best_mode:
                     best = values[f"{metric}_best"]
@@ -177,13 +191,19 @@ def write_latex_table(
                     row.append(f"{mean:.4f}")
                 else:
                     row.append(rf"${mean:.4f}\pm{std:.4f}$")
-        lines.append(" & ".join(row) + r" \\")
+            lines.append(" & ".join(row) + r" \\")
+        if dataset_index < len(datasets) - 1:
+            lines.append(r"\midrule")
     lines.extend(
         [
             r"\bottomrule",
             r"\end{tabular}%",
             r"}",
-            r"\end{sidewaystable*}",
+            r"\begin{minipage}{\textwidth}",
+            r"\scriptsize",
+            _escape(TABLE_ADAPTATION_NOTE),
+            r"\end{minipage}",
+            r"\end{table*}",
             "",
         ]
     )
