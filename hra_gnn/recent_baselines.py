@@ -76,9 +76,7 @@ def _to_pyg_graphs(
             y=torch.tensor([source.label], dtype=torch.long),
             graph_id=torch.tensor([source.graph_id], dtype=torch.long),
         )
-        adjacency = to_scipy_sparse_matrix(
-            graph.edge_index, num_nodes=graph.num_nodes
-        )
+        adjacency = to_scipy_sparse_matrix(graph.edge_index, num_nodes=graph.num_nodes)
         degrees = degree(graph.edge_index[0], num_nodes=graph.num_nodes)
         inverse = degrees.clamp_min(1).reciprocal().numpy()
         transition = adjacency * sp.diags(inverse)
@@ -97,16 +95,15 @@ def _to_pyg_graphs(
                 csgraph.laplacian(adjacency, normed=True).toarray()
             ).float()
             graph.XLX_f = torch.diag(graph.x.T @ laplacian @ graph.x).unsqueeze(0)
-            graph.XLX_s = torch.diag(
-                graph.x_s.T @ laplacian @ graph.x_s
-            ).unsqueeze(0)
+            graph.XLX_s = torch.diag(graph.x_s.T @ laplacian @ graph.x_s).unsqueeze(0)
         graphs[index] = graph
     return graphs
 
 
-def _limited_splits(dataset, splits, maximum):
+def _limited_splits(dataset, splits, maximum, *, seed: int):
     if maximum is None:
         return splits
+    rng = np.random.default_rng(seed)
     limited = {}
     for split, indices in splits.items():
         by_label: dict[int, list[int]] = {}
@@ -116,12 +113,17 @@ def _limited_splits(dataset, splits, maximum):
             limited[split] = []
             continue
         if len(by_label) == 1:
-            limited[split] = indices[:maximum]
+            candidates = np.asarray(indices, dtype=np.int64)
+            rng.shuffle(candidates)
+            limited[split] = candidates[:maximum].tolist()
             continue
         per_label = max(1, maximum // len(by_label))
         selected = []
         for label in sorted(by_label):
-            selected.extend(by_label[label][:per_label])
+            candidates = np.asarray(by_label[label], dtype=np.int64)
+            rng.shuffle(candidates)
+            selected.extend(candidates[:per_label].tolist())
+        rng.shuffle(selected)
         limited[split] = selected[:maximum]
     return limited
 
@@ -138,6 +140,26 @@ def _evaluation_loader(graphs, batch_size):
     return DataLoader(graphs, batch_sampler=batches)
 
 
+def _score_audit(labels, scores, normal_scores):
+    labels_array = np.asarray(labels, dtype=np.int64)
+    scores_array = np.asarray(scores, dtype=np.float64)
+    normal_array = np.asarray(normal_scores, dtype=np.float64)
+
+    def median_for(label):
+        selected = scores_array[labels_array == label]
+        return float(np.median(selected)) if selected.size else float("nan")
+
+    inverse_auc = anomaly_metrics(labels, (-scores_array).tolist())["auc"]
+    return {
+        "score_direction": "higher_is_more_anomalous",
+        "inverse_auc_diagnostic": inverse_auc,
+        "test_normal_score_median": median_for(0),
+        "test_anomaly_score_median": median_for(1),
+        "normal_calibration_score_median": float(np.median(normal_array)),
+        "normal_calibration_score_q95": float(np.quantile(normal_array, 0.95)),
+    }
+
+
 def _contrastive_losses(outputs, batch, temperature=0.2):
     from torch_geometric.nn import global_mean_pool
 
@@ -148,12 +170,12 @@ def _contrastive_losses(outputs, batch, temperature=0.2):
 
     graph_similarity = similarity(outputs[0], outputs[1])
     graph_positive = graph_similarity.diag()
-    graph_negative_columns = (
-        graph_similarity.sum(dim=0) - graph_positive
-    ).clamp_min(1e-12)
-    graph_negative_rows = (
-        graph_similarity.sum(dim=1) - graph_positive
-    ).clamp_min(1e-12)
+    graph_negative_columns = (graph_similarity.sum(dim=0) - graph_positive).clamp_min(
+        1e-12
+    )
+    graph_negative_rows = (graph_similarity.sum(dim=1) - graph_positive).clamp_min(
+        1e-12
+    )
     graph_loss = -0.5 * (
         torch.log(graph_positive / graph_negative_columns + 1e-12)
         + torch.log(graph_positive / graph_negative_rows + 1e-12)
@@ -163,12 +185,10 @@ def _contrastive_losses(outputs, batch, temperature=0.2):
     same_graph = batch[:, None] == batch[None, :]
     node_similarity = node_similarity * same_graph
     node_positive = node_similarity.diag()
-    node_negative_columns = (
-        node_similarity.sum(dim=0) - node_positive
-    ).clamp_min(1e-12)
-    node_negative_rows = (
-        node_similarity.sum(dim=1) - node_positive
-    ).clamp_min(1e-12)
+    node_negative_columns = (node_similarity.sum(dim=0) - node_positive).clamp_min(
+        1e-12
+    )
+    node_negative_rows = (node_similarity.sum(dim=1) - node_positive).clamp_min(1e-12)
     node_loss = -0.5 * (
         torch.log(node_positive / node_negative_columns + 1e-12)
         + torch.log(node_positive / node_negative_rows + 1e-12)
@@ -189,7 +209,85 @@ def _signet_loss(left, right, temperature=0.2):
     )
 
 
-def _score_loader(model, loader, device, args, mamba, statistics):
+def _anchor_graph_loss(
+    left,
+    right,
+    anchor_left,
+    anchor_right,
+    temperature=0.2,
+):
+    def similarity(first, second):
+        first = torch.nn.functional.normalize(first, dim=1, eps=1e-12)
+        second = torch.nn.functional.normalize(second, dim=1, eps=1e-12)
+        return torch.exp((first @ second.T / temperature).clamp(max=50.0))
+
+    positive = similarity(left, right).diag()
+    negative_rows = similarity(left, anchor_right).sum(dim=1).clamp_min(1e-12)
+    negative_columns = similarity(anchor_left, right).sum(dim=0).clamp_min(1e-12)
+    return -0.5 * (
+        torch.log(positive / negative_columns + 1e-12)
+        + torch.log(positive / negative_rows + 1e-12)
+    )
+
+
+def _node_contrastive_loss(left, right, batch, temperature=0.2):
+    from torch_geometric.nn import global_mean_pool
+
+    left = torch.nn.functional.normalize(left, dim=1, eps=1e-12)
+    right = torch.nn.functional.normalize(right, dim=1, eps=1e-12)
+    similarities = torch.exp((left @ right.T / temperature).clamp(max=50.0))
+    similarities = similarities * (batch[:, None] == batch[None, :])
+    positive = similarities.diag()
+    negative_columns = (similarities.sum(dim=0) - positive).clamp_min(1e-12)
+    negative_rows = (similarities.sum(dim=1) - positive).clamp_min(1e-12)
+    loss = -0.5 * (
+        torch.log(positive / negative_columns + 1e-12)
+        + torch.log(positive / negative_rows + 1e-12)
+    )
+    return global_mean_pool(loss, batch)
+
+
+def _dual_view_outputs(model, data, args, mamba):
+    if mamba:
+        return model(
+            data,
+            data.x,
+            data.x_s,
+            data.edge_index,
+            data.batch,
+            data.num_graphs,
+            args,
+        )
+    return model(
+        data.x,
+        data.x_s,
+        data.edge_index,
+        data.batch,
+        data.num_graphs,
+    )
+
+
+def _dual_view_anchor_bank(model, loader, device, args, mamba):
+    left, right = [], []
+    model.eval()
+    with torch.no_grad():
+        for data in loader:
+            data = data.to(device)
+            outputs = _dual_view_outputs(model, data, args, mamba)
+            left.append(outputs[0].detach())
+            right.append(outputs[1].detach())
+    return torch.cat(left, dim=0), torch.cat(right, dim=0)
+
+
+def _score_loader(
+    model,
+    loader,
+    device,
+    args,
+    mamba,
+    statistics,
+    anchor_bank,
+):
     labels: list[int] = []
     scores: list[float] = []
     graph_ids: list[int] = []
@@ -197,30 +295,15 @@ def _score_loader(model, loader, device, args, mamba, statistics):
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
-            if mamba:
-                outputs = model(
-                    data,
-                    data.x,
-                    data.x_s,
-                    data.edge_index,
-                    data.batch,
-                    data.num_graphs,
-                    args,
-                )
-            else:
-                outputs = model(
-                    data.x,
-                    data.x_s,
-                    data.edge_index,
-                    data.batch,
-                    data.num_graphs,
-                )
-            graph_loss, node_loss = _contrastive_losses(outputs, data.batch)
+            outputs = _dual_view_outputs(model, data, args, mamba)
+            graph_loss = _anchor_graph_loss(
+                outputs[0], outputs[1], anchor_bank[0], anchor_bank[1]
+            )
+            node_loss = _node_contrastive_loss(outputs[2], outputs[3], data.batch)
             if args.is_adaptive:
-                score = (
-                    (graph_loss - statistics["mean_g"]) / statistics["std_g"]
-                    + (node_loss - statistics["mean_n"]) / statistics["std_n"]
-                )
+                score = (graph_loss - statistics["mean_g"]) / statistics["std_g"] + (
+                    node_loss - statistics["mean_n"]
+                ) / statistics["std_n"]
             else:
                 score = graph_loss + node_loss
             labels.extend(data.y.reshape(-1).cpu().tolist())
@@ -254,6 +337,7 @@ def run_dual_view_fair(
         dataset,
         dataset_splits,
         baseline.get("max_graphs_per_split"),
+        seed=seed,
     )
     mamba = architecture == "gladmamba"
     rw_dim = int(baseline.get("rw_dim", 16))
@@ -278,9 +362,6 @@ def run_dual_view_fair(
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
-    )
-    train_eval_loader = _evaluation_loader(
-        [graphs[index] for index in dataset_splits["train"]], batch_size
     )
     test_loader = _evaluation_loader(
         [graphs[index] for index in dataset_splits["test"]],
@@ -382,21 +463,52 @@ def run_dual_view_fair(
             }
         )
         print(
-            f"[{official_name}-fair] epoch={epoch} "
-            f"loss={history[-1]['loss']:.6f}",
+            f"[{official_name}-fair] epoch={epoch} loss={history[-1]['loss']:.6f}",
             flush=True,
         )
 
     training_seconds = time.perf_counter() - training_start
-    train_labels, train_scores, _ = _score_loader(
-        model, train_eval_loader, device, arguments, mamba, statistics
+    train_indices = dataset_splits["train"]
+    anchor_count = min(
+        int(baseline.get("reference_graphs", 64)),
+        max(2, len(train_indices) // 2),
+    )
+    calibration_indices = train_indices[anchor_count:]
+    if anchor_count < 2 or len(calibration_indices) < 2:
+        raise ValueError(
+            "Fixed-reference scoring needs at least two reference and "
+            "two calibration normal graphs"
+        )
+    anchor_indices = train_indices[:anchor_count]
+    anchor_loader = _evaluation_loader(
+        [graphs[index] for index in anchor_indices],
+        int(config["evaluation"].get("batch_size", batch_size)),
+    )
+    train_eval_loader = _evaluation_loader(
+        [graphs[index] for index in calibration_indices], batch_size
+    )
+    anchor_bank = _dual_view_anchor_bank(model, anchor_loader, device, arguments, mamba)
+    train_labels, train_scores, train_graph_ids = _score_loader(
+        model,
+        train_eval_loader,
+        device,
+        arguments,
+        mamba,
+        statistics,
+        anchor_bank,
     )
     threshold = normal_score_threshold(
         train_scores,
         float(config["evaluation"].get("threshold_quantile", 0.99)),
     )
     labels, scores, graph_ids = _score_loader(
-        model, test_loader, device, arguments, mamba, statistics
+        model,
+        test_loader,
+        device,
+        arguments,
+        mamba,
+        statistics,
+        anchor_bank,
     )
     metrics = anomaly_metrics(
         labels,
@@ -414,10 +526,18 @@ def run_dual_view_fair(
     output.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(history).to_csv(output / "history.csv", index=False)
     pd.DataFrame(
-        {"graph_id": graph_ids, "label": labels, "score": scores}
-    ).to_csv(output / "test_predictions.csv", index=False)
+        {
+            "graph_id": train_graph_ids,
+            "label": train_labels,
+            "score": train_scores,
+        }
+    ).to_csv(output / "normal_calibration_predictions.csv", index=False)
+    pd.DataFrame({"graph_id": graph_ids, "label": labels, "score": scores}).to_csv(
+        output / "test_predictions.csv", index=False
+    )
     summary = {
         **metrics,
+        **_score_audit(labels, scores, train_scores),
         "dataset": config["dataset"]["name"],
         "variant": f"{official_name}-fair",
         "seed": seed,
@@ -432,6 +552,10 @@ def run_dual_view_fair(
         "device": str(device),
         "checkpoint_selection": "fixed_epoch",
         "threshold_source": "normal_train_scores",
+        "scoring_protocol": "fixed_normal_reference_bank",
+        "reference_graphs": anchor_count,
+        "normal_calibration_graphs": len(train_scores),
+        "subset_sampling": "seeded_stratified_random",
         "official_source": str(Path(external_root) / official_name),
         "train_graphs": len(train_labels),
         "numerically_stabilized": True,
@@ -449,9 +573,7 @@ def run_signet_fair(
         from torch_geometric.data import Data
         from torch_geometric.loader import DataLoader
     except ImportError as exc:
-        raise RuntimeError(
-            "SIGNET requires requirements-baselines.txt"
-        ) from exc
+        raise RuntimeError("SIGNET requires requirements-baselines.txt") from exc
 
     baseline = config.get("recent_baseline", {})
     seed = int(config["training"].get("seed", 42))
@@ -462,10 +584,9 @@ def run_signet_fair(
         dataset,
         _splits(config, dataset),
         baseline.get("max_graphs_per_split"),
+        seed=seed,
     )
-    selected = sorted(
-        {index for values in dataset_splits.values() for index in values}
-    )
+    selected = sorted({index for values in dataset_splits.values() for index in values})
     graphs = {}
     for index in selected:
         source = dataset[index]
@@ -488,7 +609,6 @@ def run_signet_fair(
         shuffle=True,
         drop_last=True,
     )
-    train_eval_loader = _evaluation_loader(train_graphs, batch_size)
     test_loader = _evaluation_loader(
         test_graphs,
         int(config["evaluation"].get("batch_size", batch_size)),
@@ -508,9 +628,9 @@ def run_signet_fair(
         explainer_layers=int(baseline.get("explainer_layers", 5)),
         explainer_readout=baseline.get("explainer_readout", "add"),
     )
-    model = module.SIGNET(
-        int(train_graphs[0].x.shape[1]), 0, arguments, device
-    ).to(device)
+    model = module.SIGNET(int(train_graphs[0].x.shape[1]), 0, arguments, device).to(
+        device
+    )
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=float(config["training"].get("learning_rate", 1e-4)),
@@ -546,6 +666,34 @@ def run_signet_fair(
             flush=True,
         )
 
+    def encode_reference(loader):
+        left_values, right_values = [], []
+        model.eval()
+        with torch.no_grad():
+            for data in loader:
+                data = data.to(device)
+                left, right, _, _ = model(data)
+                left_values.append(left.detach())
+                right_values.append(right.detach())
+        return torch.cat(left_values), torch.cat(right_values)
+
+    anchor_count = min(
+        int(baseline.get("reference_graphs", 64)),
+        max(2, len(train_graphs) // 2),
+    )
+    calibration_graphs = train_graphs[anchor_count:]
+    if anchor_count < 2 or len(calibration_graphs) < 2:
+        raise ValueError(
+            "Fixed-reference scoring needs at least two reference and "
+            "two calibration normal graphs"
+        )
+    anchor_loader = _evaluation_loader(
+        train_graphs[:anchor_count],
+        int(config["evaluation"].get("batch_size", batch_size)),
+    )
+    train_eval_loader = _evaluation_loader(calibration_graphs, batch_size)
+    anchor_bank = encode_reference(anchor_loader)
+
     def score(loader):
         labels, scores, graph_ids = [], [], []
         model.eval()
@@ -553,14 +701,14 @@ def run_signet_fair(
             for data in loader:
                 data = data.to(device)
                 left, right, _, _ = model(data)
-                values = _signet_loss(left, right)
+                values = _anchor_graph_loss(left, right, anchor_bank[0], anchor_bank[1])
                 labels.extend(data.y.reshape(-1).cpu().tolist())
                 scores.extend(values.cpu().tolist())
                 graph_ids.extend(data.graph_id.reshape(-1).cpu().tolist())
         return labels, scores, graph_ids
 
     training_seconds = time.perf_counter() - training_start
-    train_labels, train_scores, _ = score(train_eval_loader)
+    train_labels, train_scores, train_graph_ids = score(train_eval_loader)
     threshold = normal_score_threshold(
         train_scores,
         float(config["evaluation"].get("threshold_quantile", 0.99)),
@@ -582,10 +730,18 @@ def run_signet_fair(
     output.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(history).to_csv(output / "history.csv", index=False)
     pd.DataFrame(
-        {"graph_id": graph_ids, "label": labels, "score": scores}
-    ).to_csv(output / "test_predictions.csv", index=False)
+        {
+            "graph_id": train_graph_ids,
+            "label": train_labels,
+            "score": train_scores,
+        }
+    ).to_csv(output / "normal_calibration_predictions.csv", index=False)
+    pd.DataFrame({"graph_id": graph_ids, "label": labels, "score": scores}).to_csv(
+        output / "test_predictions.csv", index=False
+    )
     summary = {
         **metrics,
+        **_score_audit(labels, scores, train_scores),
         "dataset": config["dataset"]["name"],
         "variant": "SIGNET-fair",
         "seed": seed,
@@ -600,6 +756,10 @@ def run_signet_fair(
         "device": str(device),
         "checkpoint_selection": "fixed_epoch",
         "threshold_source": "normal_train_scores",
+        "scoring_protocol": "fixed_normal_reference_bank",
+        "reference_graphs": anchor_count,
+        "normal_calibration_graphs": len(train_scores),
+        "subset_sampling": "seeded_stratified_random",
         "official_source": str(Path(external_root) / "SIGNET"),
         "train_graphs": len(train_labels),
         "numerically_stabilized": True,
@@ -628,6 +788,7 @@ def run_muse_fair(
         dataset,
         _splits(config, dataset),
         baseline.get("max_graphs_per_split"),
+        seed=seed,
     )
     selected = sorted({index for values in splits.values() for index in values})
     index_map = {dataset_index: local for local, dataset_index in enumerate(selected)}
@@ -664,12 +825,12 @@ def run_muse_fair(
     hidden_dim = int(baseline.get("hidden_dim", 32))
     layers = int(baseline.get("num_layers", 3))
     representation_epochs = int(
-        baseline.get("muse_representation_epochs", config["training"].get("epochs", 100))
+        baseline.get(
+            "muse_representation_epochs", config["training"].get("epochs", 100)
+        )
     )
     classifier_epochs = int(baseline.get("muse_classifier_epochs", 100))
-    representation_batch = int(
-        baseline.get("muse_representation_batch_size", 16)
-    )
+    representation_batch = int(baseline.get("muse_representation_batch_size", 16))
     model = gnns.GIN(
         num_features=int(graphs[0].x.shape[1]),
         num_classes=1,
@@ -679,9 +840,9 @@ def run_muse_fair(
         mlp_layers=2,
         train_eps=False,
     ).to(device)
-    edge_decoder = gnns.MLP_Decoder(
-        layers * hidden_dim, hidden_dim, hidden_dim
-    ).to(device)
+    edge_decoder = gnns.MLP_Decoder(layers * hidden_dim, hidden_dim, hidden_dim).to(
+        device
+    )
     feature_decoder = gnns.MLP_Decoder(
         layers * hidden_dim, hidden_dim, int(graphs[0].x.shape[1])
     ).to(device)
@@ -818,6 +979,7 @@ def run_muse_fair(
     ).to_csv(output / "test_predictions.csv", index=False)
     summary = {
         **metrics,
+        **_score_audit(test_labels, test_scores, train_scores),
         "dataset": config["dataset"]["name"],
         "variant": "MUSE-fair",
         "seed": seed,
@@ -836,6 +998,8 @@ def run_muse_fair(
         "device": str(device),
         "checkpoint_selection": "fixed_epoch",
         "threshold_source": "normal_train_scores",
+        "scoring_protocol": "per_graph_reconstruction_error",
+        "subset_sampling": "seeded_stratified_random",
         "official_source": str(official_root),
         "train_graphs": len(local_splits["train"]),
         "dense_adjacency_limit": max_dense_nodes,
