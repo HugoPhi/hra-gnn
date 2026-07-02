@@ -13,6 +13,11 @@ dataset:
     validation_file: validation_ids.txt
     test_file: test_ids.txt
 
+model:
+  # 151 syscall types would create 151*3*151 canonical relations.
+  # Keep syscall-specific input projections but share messages by edge semantics.
+  relation_schema: edge_only
+
 training:
   batch_size: 32
   learning_rate: 0.0001

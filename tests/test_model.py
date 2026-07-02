@@ -103,3 +103,21 @@ def test_paper_product_score_matches_recovered_equation() -> None:
     torch.testing.assert_close(
         model.anomaly_score(output), distance * (1.0 + ssl_anomaly)
     )
+
+
+def test_edge_only_schema_avoids_quadratic_relation_expansion() -> None:
+    graph = SyntheticGraphDataset(num_graphs=8)[0]
+    model = HRAGNN(
+        input_dim=7,
+        hidden_dim=8,
+        output_dim=8,
+        num_node_types=151,
+        num_edge_types=3,
+        relation_schema="edge_only",
+    )
+
+    output = model(graph)
+
+    assert model.num_relations == 3
+    assert model.layers[0].relation_weight.shape == (3, 8, 8)
+    assert output.embedding.shape == (8,)

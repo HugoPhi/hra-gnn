@@ -102,11 +102,17 @@ class HGTBaseline(OneClassGraphModel):
         num_edge_types: int,
         num_layers: int,
         dropout: float,
+        relation_schema: str = "canonical",
     ) -> None:
         super().__init__(output_dim)
         self.num_node_types = num_node_types
         self.num_edge_types = num_edge_types
-        num_relations = num_node_types * num_edge_types * num_node_types
+        self.relation_schema = relation_schema
+        num_relations = (
+            num_edge_types
+            if relation_schema == "edge_only"
+            else num_node_types * num_edge_types * num_node_types
+        )
         self.type_projection = nn.ModuleList(
             [nn.Linear(input_dim, hidden_dim) for _ in range(num_node_types)]
         )
@@ -135,7 +141,9 @@ class HGTBaseline(OneClassGraphModel):
             if bool(mask.any()):
                 h[mask] = projection(graph.x[mask])
         relation_ids = graph.canonical_relation_ids(
-            self.num_node_types, self.num_edge_types
+            self.num_node_types,
+            self.num_edge_types,
+            self.relation_schema,
         )
         for layer in self.layers:
             h = layer(h, graph, relation_ids)
@@ -249,6 +257,7 @@ class GLocalKDBaseline(nn.Module):
         num_edge_types: int,
         num_layers: int,
         dropout: float,
+        relation_schema: str = "canonical",
     ) -> None:
         super().__init__()
         parameters = dict(
@@ -259,6 +268,7 @@ class GLocalKDBaseline(nn.Module):
             num_edge_types=num_edge_types,
             num_layers=num_layers,
             relation_fusion="static_concat",
+            relation_schema=relation_schema,
             readout="mean",
             dropout=dropout,
         )

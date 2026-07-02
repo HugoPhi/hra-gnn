@@ -301,6 +301,7 @@ class HRAGNN(nn.Module):
         output_dim: int,
         num_node_types: int,
         num_edge_types: int,
+        relation_schema: str = "canonical",
         num_layers: int = 2,
         relation_fusion: str = "deviation_attention",
         deviation_weight: float = 1.0,
@@ -318,7 +319,13 @@ class HRAGNN(nn.Module):
         self.output_dim = output_dim
         self.num_node_types = num_node_types
         self.num_edge_types = num_edge_types
-        self.num_relations = num_node_types * num_edge_types * num_node_types
+        self.relation_schema = relation_schema
+        if relation_schema == "edge_only":
+            self.num_relations = num_edge_types
+        elif relation_schema == "canonical":
+            self.num_relations = num_node_types * num_edge_types * num_node_types
+        else:
+            raise ValueError("relation_schema must be canonical or edge_only")
         self.readout = readout
         self.score_ssl_weight = score_ssl_weight
         self.score_mode = score_mode
@@ -403,7 +410,9 @@ class HRAGNN(nn.Module):
         h = torch.nn.functional.leaky_relu(h, 0.2)
 
         relation_ids = graph.canonical_relation_ids(
-            self.num_node_types, self.num_edge_types
+            self.num_node_types,
+            self.num_edge_types,
+            self.relation_schema,
         )
         diagnostics: dict[int, dict[str, float]] = {}
         for layer_index, layer in enumerate(self.layers):

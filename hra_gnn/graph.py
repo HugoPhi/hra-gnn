@@ -80,8 +80,15 @@ class GraphSample:
         )
 
     def canonical_relation_ids(
-        self, num_node_types: int, num_edge_types: int
+        self,
+        num_node_types: int,
+        num_edge_types: int,
+        relation_schema: str = "canonical",
     ) -> torch.Tensor:
+        if relation_schema == "edge_only":
+            return self.edge_type.long()
+        if relation_schema != "canonical":
+            raise ValueError("relation_schema must be canonical or edge_only")
         src, dst = self.edge_index
         return (
             self.node_type[src] * num_edge_types + self.edge_type.long()

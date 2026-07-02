@@ -38,6 +38,7 @@ def build_model(config: dict[str, Any]) -> nn.Module:
             **common,
             num_edge_types=dataset["num_edge_types"],
             dropout=model.get("dropout", 0.1),
+            relation_schema=model.get("relation_schema", "canonical"),
         )
     if architecture == "deeptralog":
         return DeepTraLogBaseline(**common)
@@ -46,12 +47,14 @@ def build_model(config: dict[str, Any]) -> nn.Module:
             **common,
             num_edge_types=dataset["num_edge_types"],
             dropout=model.get("dropout", 0.1),
+            relation_schema=model.get("relation_schema", "canonical"),
         )
     if architecture not in {"hra", "ochetgcn", "hrgcn"}:
         raise ValueError(f"Unsupported model architecture: {architecture}")
     return HRAGNN(
         **common,
         num_edge_types=dataset["num_edge_types"],
+        relation_schema=model.get("relation_schema", "canonical"),
         relation_fusion=model.get("relation_fusion", "deviation_attention"),
         deviation_weight=model.get("deviation_weight", 1.0),
         attention_temperature=model.get("attention_temperature", 1.0),
