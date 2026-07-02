@@ -299,6 +299,15 @@ CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-baseline \
 两种方法的图对比损失要求 `training.batch_size >= 2`。FlowGraph 图较大，
 CVTGAD 建议固定 `batch_size=2`，否则节点交叉注意力会产生极高的二次显存开销。
 
+按矩阵断点运行多个近期模型：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-matrix \
+  --matrix configs/experiments/fair_recent_smoke.yaml
+```
+
+调度器会持续写入 `runs.csv`，并将 OOM、不适用和数值错误连同原因保留为失败行。
+
 ## 绘图
 
 主结果图：

@@ -16,6 +16,13 @@ from .recent_baselines import (
     run_signet_fair,
 )
 
+MODEL_NAMES = {
+    "signet": "SIGNET-fair",
+    "cvtgad": "CVTGAD-fair",
+    "muse": "MUSE-fair",
+    "gladmamba": "GLADMamba-fair",
+}
+
 
 def _run_model(config: dict[str, Any], model: str, external_root: str | Path):
     if model == "signet":
@@ -28,16 +35,10 @@ def _run_model(config: dict[str, Any], model: str, external_root: str | Path):
 
 
 def _metrics_path(config: dict[str, Any], model: str, seed: int) -> Path:
-    names = {
-        "signet": "SIGNET-fair",
-        "cvtgad": "CVTGAD-fair",
-        "muse": "MUSE-fair",
-        "gladmamba": "GLADMamba-fair",
-    }
     return (
         Path(config["output"].get("results_root", "artifacts/results"))
         / config["dataset"]["name"]
-        / names[model]
+        / MODEL_NAMES[model]
         / f"seed_{seed}"
         / "metrics.json"
     )
@@ -76,7 +77,7 @@ def run_fair_matrix(
                 rows.append(
                     {
                         "dataset": config["dataset"]["name"],
-                        "variant": f"{model}-fair",
+                        "variant": MODEL_NAMES[model],
                         "seed": seed,
                         "status": "failed",
                         "error": f"{type(exc).__name__}: {exc}",

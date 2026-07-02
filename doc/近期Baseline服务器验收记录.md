@@ -127,3 +127,21 @@ CVTGAD 的节点交叉注意力对 batch 中全部节点形成稠密矩阵：
 
 此外，两种官方实现均未处理零范数嵌入，FlowGraph 会产生 `NaN/Inf`。公平 runner
 采用带 epsilon 的等价归一化，并在结果中标记 `numerically_stabilized=true`。
+
+## 7. 四模型统一 Smoke Matrix
+
+统一调度器在服务器完成 8 个组合，其中 7 个完成、1 个按预期记录为不可行：
+
+| 数据集 | 模型 | AUROC | AP | 峰值显存 | 状态 |
+|---|---|---:|---:|---:|---|
+| TraceLog | SIGNET-fair | 0.4746 | 0.4961 | 40.4 MB | COMPLETE |
+| TraceLog | CVTGAD-fair | 0.5139 | 0.5143 | 2561.8 MB | COMPLETE |
+| TraceLog | MUSE-fair | 0.3867 | 0.5066 | 72.2 MB | COMPLETE |
+| TraceLog | GLADMamba-fair | 0.6206 | 0.5503 | 1882.5 MB | COMPLETE |
+| FlowGraph | SIGNET-fair | 0.1875 | 0.3609 | 1143.6 MB | COMPLETE |
+| FlowGraph | CVTGAD-fair | 0.5469 | 0.4934 | 8860.9 MB | COMPLETE |
+| FlowGraph | MUSE-fair | -- | -- | -- | N/A：8302 节点超过稠密邻接限制 |
+| FlowGraph | GLADMamba-fair | 0.7656 | 0.6565 | 6191.9 MB | COMPLETE |
+
+这些均为 1 epoch、小样本链路验收，不能作为论文性能结论。它们的作用是证明统一矩阵、
+失败记录和 LaTeX 汇总链路已经贯通。
