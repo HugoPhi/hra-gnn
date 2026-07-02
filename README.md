@@ -321,6 +321,18 @@ CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-matrix \
 分数不依赖当前测试 batch 中恰好包含哪些图。反向 AUC 仅作为分数语义审计字段，
 不会被用于测试后翻转分数。
 
+使用正常训练图经验分布，对已训练 checkpoint 做鲁棒双分量重评分：
+
+```bash
+.venv/bin/python run.py calibrated-rescore \
+  --config artifacts/results/FlowGraph/direct_baselines_flowgraph_diagnostic/HRA-GNN/seed_11/config.yaml \
+  --checkpoint artifacts/results/FlowGraph/direct_baselines_flowgraph_diagnostic/HRA-GNN/seed_11/checkpoints/best.pt
+```
+
+该入口不读取测试标签进行方向选择或参数调整。它分别把 SVDD 距离与自监督异常
+分数映射为正常训练经验分位数，再取两者最大值。当前定位是稳定性扩展实验，不替代
+论文原始乘法评分。
+
 ## 绘图
 
 主结果图：
