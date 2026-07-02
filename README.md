@@ -307,6 +307,19 @@ CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-matrix \
 ```
 
 调度器会持续写入 `runs.csv`，并将 OOM、不适用和数值错误连同原因保留为失败行。
+每个矩阵的模型输出会隔离到该矩阵目录下的 `model_runs/`，避免 smoke、诊断和
+正式实验使用相同 seed 时互相覆盖。冒烟配置标记为 `smoke_do_not_cite`。
+
+运行 3 个随机种子、20 epoch 的诊断矩阵：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-matrix \
+  --matrix configs/experiments/fair_recent_diagnostic.yaml
+```
+
+近期对比模型在大数据集上的评估采用固定正常训练图参考库，使每个测试图的异常
+分数不依赖当前测试 batch 中恰好包含哪些图。反向 AUC 仅作为分数语义审计字段，
+不会被用于测试后翻转分数。
 
 ## 绘图
 

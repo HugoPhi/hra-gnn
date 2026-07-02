@@ -12,7 +12,7 @@ PyG: 2.6.1
 torch-scatter: 2.1.2+pt25cu121
 ```
 
-服务器项目 37 项测试全部通过。官方 baseline 仓库由
+服务器项目 41 项测试全部通过。官方 baseline 仓库由
 `configs/baselines.lock.yaml` 锁定 commit，并下载到不纳入 Git 的 `external/`。
 
 ## 2. Smoke 验收目的
@@ -130,7 +130,10 @@ CVTGAD 的节点交叉注意力对 batch 中全部节点形成稠密矩阵：
 
 ## 7. 四模型统一 Smoke Matrix
 
-统一调度器在服务器完成 8 个组合，其中 7 个完成、1 个按预期记录为不可行：
+下表是评分协议修正前的第一轮结果。SIGNET、CVTGAD 和 GLADMamba 的图级
+对比损失使用当前测试 batch 内其他图作为负样本；TraceLog 和 FlowGraph 无法
+像官方小数据集那样一次装入全部测试图，因此不同 batch 的分数不在统一尺度。
+该表现已判定为**批次依赖的无效性能诊断**，只保留用于追踪问题，禁止引用。
 
 | 数据集 | 模型 | AUROC | AP | 峰值显存 | 状态 |
 |---|---|---:|---:|---:|---|
@@ -143,5 +146,53 @@ CVTGAD 的节点交叉注意力对 batch 中全部节点形成稠密矩阵：
 | FlowGraph | MUSE-fair | -- | -- | -- | N/A：8302 节点超过稠密邻接限制 |
 | FlowGraph | GLADMamba-fair | 0.7656 | 0.6565 | 6191.9 MB | COMPLETE |
 
-这些均为 1 epoch、小样本链路验收，不能作为论文性能结论。它们的作用是证明统一矩阵、
-失败记录和 LaTeX 汇总链路已经贯通。
+### 7.1 修正方案
+
+- 训练仍使用各方法原有的批内对比损失；
+- 从正常训练图中固定抽取参考库；
+- 每个测试图仅与同一正常参考库比较，测试图之间不互相充当负样本；
+- 参考图与阈值校准图互斥，阈值仍只由正常训练数据产生；
+- 截断子集改为按标签、随机种子分层随机抽样，不再取数据文件中的前 N 项；
+- 结果记录正向 AUC、反向诊断 AUC、正常/异常分数中位数和评分协议；
+- 反向 AUC 只用于发现语义错误，不用于事后翻转正式分数。
+
+### 7.2 修正后的统一 Smoke Matrix
+
+服务器 V100，seed 11，1 epoch；仍属于 `smoke_do_not_cite`：
+
+| 数据集 | 模型 | AUROC | 反向诊断 AUROC | AP | 正常/异常分数中位数 |
+|---|---|---:|---:|---:|---:|
+| TraceLog | SIGNET-fair | 0.5713 | 0.4287 | 0.6118 | 4.1496 / 4.1585 |
+| TraceLog | CVTGAD-fair | 0.5505 | 0.4495 | 0.5878 | 22.2437 / 22.6753 |
+| TraceLog | MUSE-fair | 0.4219 | 0.5781 | 0.5441 | 232.0440 / 225.9413 |
+| TraceLog | GLADMamba-fair | 0.5920 | 0.4080 | 0.5409 | 8.4745 / 8.7523 |
+| FlowGraph | SIGNET-fair | 0.7949 | 0.2051 | 0.6565 | 3.4567 / 3.4807 |
+| FlowGraph | CVTGAD-fair | 0.8086 | 0.1914 | 0.8382 | 3.1024 / 3.5023 |
+| FlowGraph | MUSE-fair | -- | -- | -- | 稠密邻接超出 2048 节点限制 |
+| FlowGraph | GLADMamba-fair | 0.4023 | 0.5977 | 0.4348 | 159.5584 / 158.9231 |
+
+FlowGraph 的 SIGNET 从 0.1875 恢复到 0.7949，CVTGAD 从 0.5469 提升到
+0.8086，证明旧协议确实存在严重的 batch 评分失真。TraceLog 仍接近随机水平，
+需要通过更长训练判断是尚未收敛还是方法迁移能力有限。GLADMamba 在 FlowGraph
+上的分数方向仍可疑，但不得根据测试反向 AUC 直接翻转。
+
+### 7.3 证据等级与输出隔离
+
+矩阵配置必须声明证据等级：
+
+- `smoke_do_not_cite`：只验证链路，禁止进入论文表格；
+- `diagnostic_not_final`：用于选择超参数范围和排查适配问题；
+- 最终五随机种子完整数据实验才可标记为论文候选结果。
+
+每个矩阵的模型结果写入各自的 `model_runs/`，不会再由相同的
+`dataset/model/seed` 路径互相覆盖。
+
+## 8. 当前诊断长跑
+
+配置：`configs/experiments/fair_recent_diagnostic.yaml`。
+
+- TraceLog：SIGNET、CVTGAD、MUSE、GLADMamba；
+- FlowGraph：SIGNET、CVTGAD、GLADMamba，MUSE 因方法复杂度不适用；
+- 预算：3 seeds，主要模型 20 epochs，扩大分层随机子集；
+- 状态：2026-07-02 已在服务器启动；
+- 用途：判断收敛趋势和迁移适用性，仍不作为最终论文结果。
