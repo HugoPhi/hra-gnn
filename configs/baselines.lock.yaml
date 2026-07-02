@@ -17,6 +17,8 @@ baselines:
     repository: https://github.com/kswoo97/GLAD_MUSE.git
     commit: 07da392034b6c4897a08de658abfb7a61bf09728
     license_status: repository_has_no_license_file
+    patches:
+      - patches/MUSE/0001-add-reproducible-runtime-controls.patch
   GLADMamba:
     repository: https://github.com/Yali-F/GLADMamba.git
     commit: 2b2462c5ed257796290dfbf41d730d9d5e044358

@@ -1,0 +1,76 @@
+diff --git a/main.py b/main.py
+index ea5af96..8474481 100644
+--- a/main.py
++++ b/main.py
+@@ -28,6 +28,11 @@ if __name__ == "__main__" :
+     parser.add_argument('-n_layers', '--n_layers', type=int, default=3)
+     parser.add_argument('-lr', '--lr', type=float, default=0.001)
+     parser.add_argument('-gamma', '--gamma', type=float, default=1.0)
++    parser.add_argument('--trials', type=int, default=5)
++    parser.add_argument('--representation_epochs', type=int, default=200)
++    parser.add_argument('--representation_interval', type=int, default=20)
++    parser.add_argument('--classifier_epochs', type=int, default=500)
++    parser.add_argument('--smoke_grid', action='store_true')
+     
+     """
+     data: Data name.
+@@ -67,15 +72,16 @@ if __name__ == "__main__" :
+ 
+     ## Total result tables
+ 
+-    ValidAUROC = np.zeros((5, 10)) 
+-    ValidAP = np.zeros((5, 10))
+-    ValidTopK = np.zeros((5, 10))
++    num_checkpoints = int(np.ceil(args.representation_epochs / args.representation_interval))
++    ValidAUROC = np.zeros((args.trials, num_checkpoints)) 
++    ValidAP = np.zeros((args.trials, num_checkpoints))
++    ValidTopK = np.zeros((args.trials, num_checkpoints))
+ 
+-    TestAUROC = np.zeros((5, 10))
+-    TestAP = np.zeros((5, 10))
+-    TestTopK = np.zeros((5, 10))
++    TestAUROC = np.zeros((args.trials, num_checkpoints))
++    TestAP = np.zeros((args.trials, num_checkpoints))
++    TestTopK = np.zeros((args.trials, num_checkpoints))
+ 
+-    for K in range(5) : ## Simulations
++    for K in range(args.trials) : ## Simulations
+ 
+         torch.manual_seed(K)
+         torch.random.manual_seed(K)
+@@ -101,9 +107,9 @@ if __name__ == "__main__" :
+                                                     labels_pos_weights = adj_pos_weights)
+ 
+         ## Representation Learning of MUSE
+-        loss, trained_parameters = gnn_trainer.train(model = model, feature_head = feature_encoder, edge_head = edge_encoder, saving_interval = 20,
++        loss, trained_parameters = gnn_trainer.train(model = model, feature_head = feature_encoder, edge_head = edge_encoder, saving_interval = args.representation_interval,
+                                                  train_idxs = train_idxs, lr = lr, weight_decay = w_decay, 
+-                                                 epochs = 200, batch_size = BSize, 
++                                                 epochs = args.representation_epochs, batch_size = BSize, 
+                                                  return_loss = True, seed = K)
+ 
+         for p_iter in range(len(trained_parameters)) : 
+@@ -128,9 +134,12 @@ if __name__ == "__main__" :
+ 
+             ## Hyperparameters of One-class Classifier
+ 
+-            for r4_dim in [32, 64, 128] : 
++            dimensions = [32] if args.smoke_grid else [32, 64, 128]
++            learning_rates = [1e-3] if args.smoke_grid else [1e-2, 1e-3, 1e-4]
+ 
+-                for r4_lr in [1e-2, 1e-3, 1e-4] : 
++            for r4_dim in dimensions : 
++
++                for r4_lr in learning_rates : 
+ 
+                     torch.manual_seed(K)
+                     torch.random.manual_seed(K)
+@@ -142,7 +151,7 @@ if __name__ == "__main__" :
+                     p_valid_auroc, p_valid_ap, p_valid_K, p_test_auroc, p_test_ap, p_test_K = ae_trainer.train_MLP(
+                                                 encoder_param = curP, classifier = MLP_autoencoder, train_idxs = train_idxs, valid_idxs = valid_idxs, valid_labels = valid_labels, 
+                                                   test_idxs = test_idxs, test_labels = test_labels, 
+-                                                  lr = r4_lr, epochs = 500, saving_interval = 1, w_decay = 1e-4, seed = K)
++                                                  lr = r4_lr, epochs = args.classifier_epochs, saving_interval = 1, w_decay = 1e-4, seed = K)
+ 
+                     if p_valid_auroc > valid_acc1 : 
+                         valid_acc1 = p_valid_auroc
