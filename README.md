@@ -125,6 +125,21 @@ ADFA-LD 使用官方三个轨迹目录构图：
 ```
 
 两者输出为可内存映射的 packed 图数据，不要求把全部图对象一次性载入内存。
+当前已验收 Zenodo HDFS-100k 结构化子集和完整 ADFA-LD。HDFS-100k 只用于
+数据可用性筛查，论文最终结果必须明确区分于完整 HDFS_v1。
+
+ADFA-LD 有 151 种 syscall 节点类型，配置采用 `relation_schema: edge_only`：
+保留 syscall 专属输入投影，但消息参数只按三种边类型共享，避免产生 68,403 种
+canonical 关系。
+
+运行简单模型三随机种子可用性实验：
+
+```bash
+.venv/bin/python run.py experiment \
+  --suite configs/experiments/usability_hdfs.yaml
+.venv/bin/python run.py experiment \
+  --suite configs/experiments/usability_adfa_ld.yaml
+```
 
 为官方近期模型导出标准 TU Dataset，并保留冻结划分映射：
 
