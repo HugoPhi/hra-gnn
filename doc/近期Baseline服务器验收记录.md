@@ -194,5 +194,38 @@ FlowGraph 的 SIGNET 从 0.1875 恢复到 0.7949，CVTGAD 从 0.5469 提升到
 - TraceLog：SIGNET、CVTGAD、MUSE、GLADMamba；
 - FlowGraph：SIGNET、CVTGAD、GLADMamba，MUSE 因方法复杂度不适用；
 - 预算：3 seeds，主要模型 20 epochs，扩大分层随机子集；
-- 状态：2026-07-02 已在服务器启动；
+- 状态：2026-07-02 在服务器完成，21/21 组合成功；
 - 用途：判断收敛趋势和迁移适用性，仍不作为最终论文结果。
+
+### 8.1 三随机种子结果
+
+| 数据集 | 模型 | AUROC | AP | 结论 |
+|---|---|---:|---:|---|
+| TraceLog | SIGNET-fair | 0.5052 +/- 0.0285 | 0.5365 +/- 0.0805 | 接近随机 |
+| TraceLog | CVTGAD-fair | 0.4920 +/- 0.0654 | 0.5214 +/- 0.0521 | 接近随机 |
+| TraceLog | MUSE-fair | 0.4880 +/- 0.0750 | 0.5078 +/- 0.0808 | 接近随机 |
+| TraceLog | GLADMamba-fair | 0.5395 +/- 0.0476 | 0.5816 +/- 0.0474 | 略高于随机 |
+| FlowGraph | SIGNET-fair | 0.5202 +/- 0.2812 | 0.5105 +/- 0.1503 | 极不稳定 |
+| FlowGraph | CVTGAD-fair | 0.7227 +/- 0.2520 | 0.6807 +/- 0.2796 | 均值较高但极不稳定 |
+| FlowGraph | GLADMamba-fair | 0.5104 +/- 0.2858 | 0.5779 +/- 0.2875 | 极不稳定 |
+
+TraceLog 上 SIGNET 的训练 loss 从约 3.42 降至 2.10，但 AUROC 仍接近
+0.5，说明链路和优化器正常，模型目标却未对齐该日志异常任务。FlowGraph
+的单个 seed 可出现很高成绩，例如 CVTGAD seed 33 为 1.0，但另两个 seed
+明显较低；不得选择最好 seed 作为论文结果。
+
+### 8.2 阶段决策
+
+- 不继续为这些跨域方法执行五 seed 全量盲跑；
+- 将其保留为“近期通用图异常检测方法的公平迁移适配”补充实验；
+- 主表算力优先投入 HRGCN、HRA-GNN 及相同任务协议下的基础方法；
+- FlowGraph 必须同时报告统计基线，分析其容易被图规模等捷径分开的原因。
+
+## 9. 直接任务基线
+
+2026-07-02 已启动 `baselines_tracelog.yaml`：
+
+- 模型：OCHetGCN、GLocalKD、HGT、DeepTraLog、HRGCN、HRA-GNN；
+- 每个模型五个随机种子；
+- 默认 100 epochs，并允许只依据无标签验证损失早停；
+- 完成 TraceLog 后再启动相同协议的 FlowGraph 套件。
