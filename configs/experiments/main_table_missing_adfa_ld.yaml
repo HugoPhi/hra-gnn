@@ -1,0 +1,32 @@
+name: main_table_missing_adfa_ld
+base_config: ../adfa_ld.yaml
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: first_main_table_not_final
+  training:
+    epochs: 10
+    batch_size: 8
+    early_stopping_patience: 3
+  evaluation:
+    score_mode: svdd
+    batch_size: 8
+    sampling: seeded_stratified
+
+variants:
+  HGT-reimplemented:
+    model:
+      architecture: hgt
+    ssl:
+      enabled: false
+  HRGCN:
+    model:
+      architecture: hrgcn
+      relation_fusion: static_concat
+      readout: max
+  HRA-GNN:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid

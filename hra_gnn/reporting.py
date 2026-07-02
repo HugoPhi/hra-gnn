@@ -26,6 +26,15 @@ DISPLAY_NAMES = {
     "mcc": "MCC",
 }
 
+METHOD_ALIASES = {
+    "DeepTraLog": "DeepTraLog-reimplemented",
+    "DeepTraLog-adapted": "DeepTraLog-reimplemented",
+    "GLocalKD": "GLocalKD-reimplemented",
+    "GLocalKD-adapted": "GLocalKD-reimplemented",
+    "HGT": "HGT-reimplemented",
+    "OCHetGCN": "OCHetGCN-reimplemented",
+}
+
 
 def _escape(value: object) -> str:
     return (
@@ -57,6 +66,7 @@ def summarize_runs(
     if not available:
         raise ValueError("None of the requested metrics are present")
     runs = runs.rename(columns={method_column: "method"})
+    runs["method"] = runs["method"].replace(METHOD_ALIASES)
     if "status" in runs:
         runs = runs[runs["status"].fillna("complete") == "complete"]
     if aggregation == "best":

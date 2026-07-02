@@ -63,3 +63,28 @@ def test_best_table_keeps_metrics_from_the_auc_selected_run(tmp_path: Path) -> N
     assert "0.9000" in text
     assert "0.6000" in text
     assert "\\pm" not in text
+
+
+def test_reimplemented_method_aliases_are_merged(tmp_path: Path) -> None:
+    source = tmp_path / "runs.csv"
+    pd.DataFrame(
+        [
+            {
+                "dataset": "TraceLog",
+                "variant": "DeepTraLog",
+                "seed": 11,
+                "auc": 0.70,
+            },
+            {
+                "dataset": "HDFS",
+                "variant": "DeepTraLog-adapted",
+                "seed": 22,
+                "auc": 0.80,
+            },
+        ]
+    ).to_csv(source, index=False)
+
+    summary = summarize_runs([source], ["auc"], aggregation="best")
+
+    assert set(summary["method"]) == {"DeepTraLog-reimplemented"}
+    assert set(summary["dataset"]) == {"TraceLog", "HDFS"}
