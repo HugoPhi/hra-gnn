@@ -25,6 +25,7 @@ from .recent_baselines import (
 )
 from .recent_experiments import run_fair_matrix
 from .reporting import DEFAULT_METRICS, summarize_runs, write_latex_table
+from .rescoring import rescore_calibrated_max
 from .trainer import Trainer, evaluate_checkpoint
 
 
@@ -93,6 +94,10 @@ def build_parser() -> argparse.ArgumentParser:
     fair_matrix = subparsers.add_parser("fair-matrix")
     fair_matrix.add_argument("--matrix", required=True)
     fair_matrix.add_argument("--force", action="store_true")
+
+    rescore = subparsers.add_parser("calibrated-rescore")
+    rescore.add_argument("--config", required=True)
+    rescore.add_argument("--checkpoint", required=True)
 
     plot = subparsers.add_parser("plot")
     plot.add_argument(
@@ -192,13 +197,9 @@ def main() -> None:
     elif arguments.command == "fair-baseline":
         config = _config(arguments)
         if arguments.model == "signet":
-            summary = run_signet_fair(
-                config, external_root=arguments.external_root
-            )
+            summary = run_signet_fair(config, external_root=arguments.external_root)
         elif arguments.model == "muse":
-            summary = run_muse_fair(
-                config, external_root=arguments.external_root
-            )
+            summary = run_muse_fair(config, external_root=arguments.external_root)
         else:
             summary = run_dual_view_fair(
                 config,
@@ -207,11 +208,15 @@ def main() -> None:
             )
         print(json.dumps(summary, indent=2))
     elif arguments.command == "fair-matrix":
-        root, rows = run_fair_matrix(
-            arguments.matrix, resume=not arguments.force
-        )
+        root, rows = run_fair_matrix(arguments.matrix, resume=not arguments.force)
         complete = int((rows["status"] == "complete").sum())
         print(f"Wrote {len(rows)} runs ({complete} complete) to {root.resolve()}")
+    elif arguments.command == "calibrated-rescore":
+        summary = rescore_calibrated_max(
+            load_config(arguments.config),
+            arguments.checkpoint,
+        )
+        print(json.dumps(summary, indent=2))
     elif arguments.command == "plot":
         functions = {
             "comparison": plot_main_comparison,

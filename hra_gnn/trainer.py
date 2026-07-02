@@ -473,6 +473,9 @@ class Trainer:
         if return_details:
             metrics["_scores"] = scores
             metrics["_labels"] = labels
+            metrics["_svdd_scores"] = [row["svdd_score"] for row in rows]
+            metrics["_ssl_scores"] = [row["ssl_anomaly_score"] for row in rows]
+            metrics["_graph_ids"] = [row["graph_id"] for row in rows]
         return metrics
 
     def _save_checkpoint(self, name: str, epoch: int) -> None:
