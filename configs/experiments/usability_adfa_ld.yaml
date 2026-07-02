@@ -1,0 +1,34 @@
+name: usability_adfa_ld
+base_config: ../adfa_ld.yaml
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: dataset_usability
+  training:
+    epochs: 10
+    batch_size: 8
+    early_stopping_patience: 3
+  evaluation:
+    score_mode: svdd
+    batch_size: 8
+    sampling: seeded_stratified
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+  DeepTraLog-adapted:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+  GLocalKD-adapted:
+    model:
+      architecture: glocalkd
+    ssl:
+      enabled: false

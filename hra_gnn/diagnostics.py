@@ -16,6 +16,13 @@ from .utils import write_json
 def graph_statistics(config: dict[str, Any]) -> tuple[pd.DataFrame, dict[str, Any]]:
     dataset = load_dataset(config["dataset"])
     dataset_config = config["dataset"]
+    metadata = getattr(dataset, "metadata", {})
+    num_node_types = int(
+        metadata.get("num_node_types", dataset_config["num_node_types"])
+    )
+    num_edge_types = int(
+        metadata.get("num_edge_types", dataset_config["num_edge_types"])
+    )
     rows: list[dict[str, Any]] = []
     for index in range(len(dataset)):
         graph = dataset[index]
@@ -26,9 +33,9 @@ def graph_statistics(config: dict[str, Any]) -> tuple[pd.DataFrame, dict[str, An
             "num_nodes": graph.num_nodes,
             "num_edges": graph.num_edges,
         }
-        for type_id in range(dataset_config["num_node_types"]):
+        for type_id in range(num_node_types):
             row[f"node_type_{type_id}"] = int((graph.node_type == type_id).sum())
-        for type_id in range(dataset_config["num_edge_types"]):
+        for type_id in range(num_edge_types):
             row[f"edge_type_{type_id}"] = int((graph.edge_type == type_id).sum())
         rows.append(row)
     frame = pd.DataFrame(rows)

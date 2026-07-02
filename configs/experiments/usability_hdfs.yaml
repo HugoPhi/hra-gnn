@@ -1,0 +1,32 @@
+name: usability_hdfs
+base_config: ../hdfs.yaml
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: dataset_usability
+  training:
+    epochs: 10
+    early_stopping_patience: 3
+  evaluation:
+    score_mode: svdd
+    sampling: seeded_stratified
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+  DeepTraLog-adapted:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+  GLocalKD-adapted:
+    model:
+      architecture: glocalkd
+    ssl:
+      enabled: false
