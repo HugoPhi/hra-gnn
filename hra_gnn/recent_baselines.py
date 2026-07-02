@@ -44,7 +44,9 @@ def _splits(config: dict[str, Any], dataset) -> dict[str, list[int]]:
     )
 
 
-def _to_pyg_graphs(dataset, *, rw_dim: int, dg_dim: int, mamba: bool):
+def _to_pyg_graphs(
+    dataset, indices: list[int], *, rw_dim: int, dg_dim: int, mamba: bool
+):
     try:
         from scipy import sparse as sp
         from scipy.sparse import csgraph
@@ -55,8 +57,8 @@ def _to_pyg_graphs(dataset, *, rw_dim: int, dg_dim: int, mamba: bool):
             "Official baselines require requirements-baselines.txt"
         ) from exc
 
-    graphs = []
-    for index in range(len(dataset)):
+    graphs = {}
+    for index in indices:
         source = dataset[index]
         graph = Data(
             x=source.x.float(),
@@ -89,8 +91,27 @@ def _to_pyg_graphs(dataset, *, rw_dim: int, dg_dim: int, mamba: bool):
             graph.XLX_s = torch.diag(
                 graph.x_s.T @ laplacian @ graph.x_s
             ).unsqueeze(0)
-        graphs.append(graph)
+        graphs[index] = graph
     return graphs
+
+
+def _limited_splits(dataset, splits, maximum):
+    if maximum is None:
+        return splits
+    limited = {}
+    for split, indices in splits.items():
+        by_label: dict[int, list[int]] = {}
+        for index in indices:
+            by_label.setdefault(int(dataset[index].label), []).append(index)
+        if len(by_label) == 1:
+            limited[split] = indices[:maximum]
+            continue
+        per_label = max(1, maximum // len(by_label))
+        selected = []
+        for label in sorted(by_label):
+            selected.extend(by_label[label][:per_label])
+        limited[split] = selected[:maximum]
+    return limited
 
 
 def _score_loader(model, loader, device, args, mamba, statistics):
@@ -155,10 +176,24 @@ def run_dual_view_fair(
     device = resolve_device(config["training"].get("device", "auto"))
     dataset = load_dataset(config["dataset"])
     dataset_splits = _splits(config, dataset)
+    dataset_splits = _limited_splits(
+        dataset,
+        dataset_splits,
+        baseline.get("max_graphs_per_split"),
+    )
     mamba = architecture == "gladmamba"
     rw_dim = int(baseline.get("rw_dim", 16))
     dg_dim = int(baseline.get("dg_dim", 16))
-    graphs = _to_pyg_graphs(dataset, rw_dim=rw_dim, dg_dim=dg_dim, mamba=mamba)
+    selected_indices = sorted(
+        {index for indices in dataset_splits.values() for index in indices}
+    )
+    graphs = _to_pyg_graphs(
+        dataset,
+        selected_indices,
+        rw_dim=rw_dim,
+        dg_dim=dg_dim,
+        mamba=mamba,
+    )
     batch_size = int(config["training"].get("batch_size", 32))
     train_loader = DataLoader(
         [graphs[index] for index in dataset_splits["train"]],
@@ -198,7 +233,7 @@ def run_dual_view_fair(
     model = model_class(
         int(baseline.get("hidden_dim", 16)),
         int(baseline.get("num_layers", 5)),
-        int(graphs[0].x.shape[1]),
+        int(next(iter(graphs.values())).x.shape[1]),
         rw_dim + dg_dim,
         arguments,
     ).to(device)
