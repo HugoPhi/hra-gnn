@@ -1,0 +1,38 @@
+name: baselines_hdfs
+base_config: ../hdfs.yaml
+seeds: [11, 22, 33, 44, 55]
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+    evaluation:
+      score_mode: svdd
+  HGT-one-class:
+    model:
+      architecture: hgt
+    ssl:
+      enabled: false
+    evaluation:
+      score_mode: svdd
+  DeepTraLog-adapted:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+    evaluation:
+      score_mode: svdd
+  HRGCN-adapted:
+    model:
+      architecture: hrgcn
+      relation_fusion: static_concat
+      readout: max
+  HRA-GNN:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid

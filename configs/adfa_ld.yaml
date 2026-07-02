@@ -1,0 +1,23 @@
+extends: base.yaml
+
+dataset:
+  name: ADFA-LD
+  kind: packed
+  root: data/ProcessedData_ADFA_LD
+  feature_dim: 8
+  num_node_types: 1
+  num_edge_types: 3
+  split:
+    mode: provided
+    train_file: train_ids.txt
+    validation_file: validation_ids.txt
+    test_file: test_ids.txt
+
+training:
+  batch_size: 32
+  learning_rate: 0.0001
+
+augmentation:
+  methods:
+    - edge_perturbation
+    - node_type_swap

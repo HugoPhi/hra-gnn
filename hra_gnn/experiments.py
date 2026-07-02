@@ -23,8 +23,18 @@ def _summarize(rows: pd.DataFrame, grouping: list[str]) -> pd.DataFrame:
         "svdd_ap",
         "ssl_auc",
         "ssl_ap",
+        "precision_at_budget",
+        "recall_at_budget",
+        "tpr_at_fpr",
+        "precision",
+        "recall",
+        "f1",
+        "mcc",
+        "observed_fpr",
         "training_seconds",
         "mean_inference_seconds",
+        "peak_gpu_memory_mb",
+        "peak_process_memory_mb",
         "parameters",
     ]
     available = [metric for metric in metrics if metric in rows]

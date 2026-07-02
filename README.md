@@ -13,6 +13,7 @@
 - [复现状态与实测结果](doc/复现状态.md)
 - [代码与论文实现详解](doc/代码与论文实现详解.md)
 - [MathType 评分公式恢复证据](doc/评分公式恢复证据.md)
+- [数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)
 
 其中《代码与论文实现详解》是严格审查模型实现时的主文档，包含公式到代码的
 逐项对应、张量形状、训练流程、工程优化、已知缺陷和建议审查顺序。
@@ -83,7 +84,7 @@ pip install -r requirements.txt
 
 ## 数据集
 
-下载并解压两个官方数据集：
+下载并解压 TraceLog 和 FlowGraph：
 
 ```bash
 .venv/bin/python scripts/download_data.py all
@@ -102,6 +103,27 @@ pip install -r requirements.txt
 data/ProcessedData_FlowGraph/
 data/ProcessedData_TraceLog/
 ```
+
+HDFS 使用 Loghub 已解析文件构图：
+
+```bash
+.venv/bin/python run.py prepare-data \
+  --kind hdfs \
+  --input data/raw/HDFS/HDFS.log_structured.csv \
+  --labels data/raw/HDFS/anomaly_label.csv \
+  --output data/ProcessedData_HDFS
+```
+
+ADFA-LD 使用官方三个轨迹目录构图：
+
+```bash
+.venv/bin/python run.py prepare-data \
+  --kind adfa-ld \
+  --input data/raw/ADFA-LD \
+  --output data/ProcessedData_ADFA_LD
+```
+
+两者输出为可内存映射的 packed 图数据，不要求把全部图对象一次性载入内存。
 
 当前实现使用 HRGCN 发布的图 ID 划分文件。TraceLog 有独立的训练、验证和测试
 划分；FlowGraph 只有训练划分和一个评估划分。
@@ -122,6 +144,8 @@ data/ProcessedData_TraceLog/
 ```bash
 .venv/bin/python run.py data-info --config configs/flowgraph.yaml
 .venv/bin/python run.py data-info --config configs/tracelog.yaml
+.venv/bin/python run.py data-info --config configs/hdfs.yaml
+.venv/bin/python run.py data-info --config configs/adfa_ld.yaml
 ```
 
 ### 训练
@@ -204,6 +228,44 @@ artifacts/results/suites/<实验套件名称>/
 
 实验默认根据已有 `metrics.json` 断点续跑。只有明确需要覆盖已完成结果时才使用
 `--force`。
+
+## 多指标和 LaTeX 大表
+
+每次最终测试统一输出：
+
+- AUROC、AP；
+- Precision@1%、Recall@1%、TPR@1%FPR；
+- Precision、Recall、F1、MCC；
+- 参数量、训练/推理时间和 CPU/GPU 峰值内存。
+
+F1/MCC 的阈值来自正常训练分数的 99% 分位数，不使用测试标签。训练最佳
+checkpoint 由无标签验证 SVDD 损失选择，AUC/AP 仅用于监控。
+
+合并多个实验套件并生成 LaTeX：
+
+```bash
+.venv/bin/python run.py table \
+  --input artifacts/results/suites/baselines_tracelog/runs.csv \
+  --input artifacts/results/suites/baselines_flowgraph/runs.csv \
+  --input artifacts/results/suites/baselines_hdfs/runs.csv \
+  --input artifacts/results/suites/baselines_adfa_ld/runs.csv \
+  --summary-csv artifacts/results/tables/all_models_summary.csv \
+  --output artifacts/results/tables/all_models_all_metrics.tex
+```
+
+生成的表使用 `booktabs`、`graphicx` 和 `rotating`。
+
+## 官方近期 Baseline
+
+SIGNET、CVTGAD、MUSE、GLADMamba 的官方仓库和 commit 已锁定在
+`configs/baselines.lock.yaml`。下载到不纳入 Git 的 `external/`：
+
+```bash
+.venv/bin/python scripts/fetch_baselines.py
+```
+
+官方协议结果只负责验证实现；公平主表将使用本项目冻结的数据划分、共同输入和
+无标签 checkpoint 选择。详情见[数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)。
 
 ## 绘图
 

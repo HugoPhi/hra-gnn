@@ -200,6 +200,84 @@ class SyntheticGraphDataset(Dataset[GraphSample]):
         return self.graphs[index]
 
 
+class PackedGraphDataset(Dataset[GraphSample]):
+    """Memory-mapped graph dataset for large log collections."""
+
+    def __init__(self, root: str | Path) -> None:
+        self.root = Path(root)
+        metadata_path = self.root / "metadata.json"
+        self.metadata = (
+            json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata_path.exists()
+            else {}
+        )
+        required = {
+            "x": "x.npy",
+            "edge_index": "edge_index.npy",
+            "node_type": "node_type.npy",
+            "edge_type": "edge_type.npy",
+            "graph_ptr": "graph_ptr.npy",
+            "edge_ptr": "edge_ptr.npy",
+            "labels": "labels.npy",
+            "graph_ids_array": "graph_ids.npy",
+        }
+        missing = [
+            str(self.root / filename)
+            for filename in required.values()
+            if not (self.root / filename).exists()
+        ]
+        if missing:
+            raise FileNotFoundError(
+                "Packed graph data are incomplete. Missing:\n- "
+                + "\n- ".join(missing)
+            )
+        for name, filename in required.items():
+            setattr(self, name, np.load(self.root / filename, mmap_mode="r"))
+        weight_path = self.root / "edge_weight.npy"
+        self.edge_weight = (
+            np.load(weight_path, mmap_mode="r") if weight_path.exists() else None
+        )
+        self.graph_ids = self.graph_ids_array.astype(np.int64).tolist()
+        self.labels_by_id = {
+            int(graph_id): int(label)
+            for graph_id, label in zip(self.graph_ids, self.labels)
+        }
+        self._index_by_id = {
+            int(graph_id): index for index, graph_id in enumerate(self.graph_ids)
+        }
+
+    def __len__(self) -> int:
+        return len(self.graph_ids)
+
+    def __getitem__(self, index: int) -> GraphSample:
+        node_start, node_end = map(int, self.graph_ptr[index : index + 2])
+        edge_start, edge_end = map(int, self.edge_ptr[index : index + 2])
+        weights = None
+        if self.edge_weight is not None:
+            weights = torch.from_numpy(
+                np.asarray(self.edge_weight[edge_start:edge_end]).copy()
+            )
+        return GraphSample(
+            graph_id=int(self.graph_ids[index]),
+            x=torch.from_numpy(np.asarray(self.x[node_start:node_end]).copy()),
+            edge_index=torch.from_numpy(
+                np.asarray(self.edge_index[:, edge_start:edge_end]).copy()
+            ).long()
+            - node_start,
+            node_type=torch.from_numpy(
+                np.asarray(self.node_type[node_start:node_end]).copy()
+            ).long(),
+            edge_type=torch.from_numpy(
+                np.asarray(self.edge_type[edge_start:edge_end]).copy()
+            ).long(),
+            edge_weight=weights,
+            label=int(self.labels[index]),
+        )
+
+    def indices_for_ids(self, ids: Sequence[int]) -> list[int]:
+        return [self._index_by_id[int(graph_id)] for graph_id in ids]
+
+
 def load_dataset(config: dict) -> Dataset[GraphSample]:
     kind = config.get("kind", "csv")
     if kind == "synthetic":
@@ -220,6 +298,8 @@ def load_dataset(config: dict) -> Dataset[GraphSample]:
             trace_info_file=config.get("trace_info_file", "trace_info.csv"),
             cache_graphs=config.get("cache_graphs", False),
         )
+    if kind == "packed":
+        return PackedGraphDataset(config["root"])
     raise ValueError(f"Unsupported dataset kind: {kind}")
 
 
@@ -264,8 +344,8 @@ def load_provided_splits(
     validation_file: str | None,
     test_file: str,
 ) -> dict[str, list[int]]:
-    if not isinstance(dataset, CSVGraphDataset):
-        raise TypeError("Provided graph-ID splits require CSVGraphDataset")
+    if not hasattr(dataset, "indices_for_ids"):
+        raise TypeError("Provided graph-ID splits require an indexed graph dataset")
 
     def read_ids(filename: str | None) -> list[int]:
         if not filename:

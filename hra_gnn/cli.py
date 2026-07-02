@@ -16,6 +16,8 @@ from .plotting import (
     plot_sensitivity,
     plot_training_history,
 )
+from .preprocessing import prepare_adfa_ld, prepare_hdfs
+from .reporting import DEFAULT_METRICS, summarize_runs, write_latex_table
 from .trainer import Trainer, evaluate_checkpoint
 
 
@@ -46,6 +48,20 @@ def build_parser() -> argparse.ArgumentParser:
     experiment.add_argument(
         "--force", action="store_true", help="rerun completed suite jobs"
     )
+
+    table = subparsers.add_parser("table")
+    table.add_argument("--input", action="append", required=True)
+    table.add_argument("--output", required=True)
+    table.add_argument("--summary-csv")
+    table.add_argument("--metrics", nargs="+", default=list(DEFAULT_METRICS))
+
+    prepare = subparsers.add_parser("prepare-data")
+    prepare.add_argument("--kind", required=True, choices=("hdfs", "adfa-ld"))
+    prepare.add_argument("--input", required=True)
+    prepare.add_argument("--labels")
+    prepare.add_argument("--output", required=True)
+    prepare.add_argument("--seed", type=int, default=42)
+    prepare.add_argument("--max-graphs", type=int)
 
     plot = subparsers.add_parser("plot")
     plot.add_argument(
@@ -104,6 +120,37 @@ def main() -> None:
     elif arguments.command == "experiment":
         root, rows = run_experiment_suite(arguments.suite, resume=not arguments.force)
         print(f"Wrote {len(rows)} runs to {root}")
+    elif arguments.command == "table":
+        summary = summarize_runs(arguments.input, arguments.metrics)
+        if arguments.summary_csv:
+            summary_path = Path(arguments.summary_csv)
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary.to_csv(summary_path, index=False)
+        output = write_latex_table(
+            summary,
+            arguments.output,
+            metrics=arguments.metrics,
+        )
+        print(f"Wrote {output.resolve()}")
+    elif arguments.command == "prepare-data":
+        if arguments.kind == "hdfs":
+            if not arguments.labels:
+                parser.error("prepare-data --kind hdfs requires --labels")
+            output = prepare_hdfs(
+                arguments.input,
+                arguments.labels,
+                arguments.output,
+                seed=arguments.seed,
+                max_graphs=arguments.max_graphs,
+            )
+        else:
+            output = prepare_adfa_ld(
+                arguments.input,
+                arguments.output,
+                seed=arguments.seed,
+                max_graphs=arguments.max_graphs,
+            )
+        print(f"Wrote prepared dataset to {output.resolve()}")
     elif arguments.command == "plot":
         functions = {
             "comparison": plot_main_comparison,

@@ -1,0 +1,21 @@
+baselines:
+  HRGCN:
+    repository: https://github.com/jiaxililearn/HRGCN.git
+    commit: 970be3a457c91e20089eeb3d1519da11c21fd3c2
+    license_status: repository_has_no_license_file
+  SIGNET:
+    repository: https://github.com/yixinliu233/SIGNET.git
+    commit: 4c6799d89e8d2b1ecf06bbd33552a87ebe06c789
+    license_status: license_file_present
+  CVTGAD:
+    repository: https://github.com/jindongli-Ai/CVTGAD.git
+    commit: dc5f896e3a3c61c43781c365395820d8688aa3bb
+    license_status: repository_has_no_license_file
+  MUSE:
+    repository: https://github.com/kswoo97/GLAD_MUSE.git
+    commit: 07da392034b6c4897a08de658abfb7a61bf09728
+    license_status: repository_has_no_license_file
+  GLADMamba:
+    repository: https://github.com/Yali-F/GLADMamba.git
+    commit: 2b2462c5ed257796290dfbf41d730d9d5e044358
+    license_status: repository_has_no_license_file

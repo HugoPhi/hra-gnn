@@ -54,6 +54,10 @@ evaluation:
   score_mode: paper_product
   score_ssl_weight: 0.10
   collect_diagnostics: false
+  alert_fraction: 0.01
+  target_fpr: 0.01
+  # Threshold metrics use only normal training scores, never test labels.
+  threshold_quantile: 0.99
 
 monitoring:
   enabled: false

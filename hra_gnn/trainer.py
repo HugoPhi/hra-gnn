@@ -17,7 +17,7 @@ from .baselines import DeepTraLogBaseline, GLocalKDBaseline, HGTBaseline
 from .config import save_resolved_config
 from .data import load_dataset, load_provided_splits, make_splits
 from .graph import batch_graphs
-from .metrics import anomaly_metrics
+from .metrics import anomaly_metrics, normal_score_threshold
 from .model import HRAGNN
 from .utils import parameter_count, resolve_device, seed_everything, write_json
 
@@ -99,6 +99,10 @@ class Trainer:
         seed_everything(self.seed)
         self.device = resolve_device(config["training"].get("device", "auto"))
         self.dataset = load_dataset(config["dataset"])
+        dataset_metadata = getattr(self.dataset, "metadata", {})
+        for key in ("feature_dim", "num_node_types", "num_edge_types"):
+            if key in dataset_metadata:
+                config["dataset"][key] = int(dataset_metadata[key])
         split_config = config["dataset"].get("split", {})
         if split_config.get("mode", "generated") == "provided":
             self.splits = load_provided_splits(
@@ -296,6 +300,8 @@ class Trainer:
         *,
         collect_diagnostics: bool = False,
         write_predictions: bool = False,
+        threshold: float | None = None,
+        return_details: bool = False,
     ) -> dict[str, Any]:
         self.model.eval()
         if not self.splits[split]:
@@ -393,7 +399,15 @@ class Trainer:
                             }
                         )
 
-        metrics = anomaly_metrics(labels, scores)
+        metrics = anomaly_metrics(
+            labels,
+            scores,
+            threshold=threshold,
+            alert_fraction=float(
+                self.config["evaluation"].get("alert_fraction", 0.01)
+            ),
+            target_fpr=float(self.config["evaluation"].get("target_fpr", 0.01)),
+        )
         finite_svdd = [row["svdd_score"] for row in rows]
         if finite_svdd and not any(math.isnan(value) for value in finite_svdd):
             svdd_metrics = anomaly_metrics(labels, finite_svdd)
@@ -419,6 +433,9 @@ class Trainer:
                 pd.DataFrame(relation_rows).to_csv(
                     self.output_dir / f"{split}_relations.csv", index=False
                 )
+        if return_details:
+            metrics["_scores"] = scores
+            metrics["_labels"] = labels
         return metrics
 
     def _save_checkpoint(self, name: str, epoch: int) -> None:
@@ -472,7 +489,8 @@ class Trainer:
                 validation = self.evaluate("validation")
                 row["validation_auc"] = validation["auc"]
                 row["validation_ap"] = validation["ap"]
-                monitored = validation["auc"]
+                row["validation_svdd_loss"] = validation["mean_svdd_loss"]
+                monitored = -validation["mean_svdd_loss"]
                 if math.isnan(monitored):
                     monitored = -row["loss"]
                 if monitored > best_metric:
@@ -543,6 +561,11 @@ class Trainer:
         if best_path.exists():
             self.load_checkpoint(best_path)
         self._save_checkpoint("last.pt", len(history))
+        calibration = self.evaluate("train", return_details=True)
+        threshold = normal_score_threshold(
+            calibration.pop("_scores"),
+            float(self.config["evaluation"].get("threshold_quantile", 0.99)),
+        )
         collect_diagnostics = bool(
             self.config["evaluation"].get("collect_diagnostics", False)
         )
@@ -550,6 +573,7 @@ class Trainer:
             "test",
             collect_diagnostics=collect_diagnostics,
             write_predictions=True,
+            threshold=threshold,
         )
         summary = {
             **test_metrics,
@@ -559,8 +583,15 @@ class Trainer:
             "epochs_completed": len(history),
             "training_seconds": total_training_seconds,
             "peak_process_memory_mb": peak_rss / (1024**2),
+            "peak_gpu_memory_mb": (
+                torch.cuda.max_memory_allocated(self.device) / (1024**2)
+                if self.device.type == "cuda"
+                else 0.0
+            ),
             "parameters": parameter_count(self.model),
             "device": str(self.device),
+            "threshold_source": "normal_train_scores",
+            "checkpoint_selection": "unlabeled_validation_svdd_loss",
         }
         write_json(summary, self.output_dir / "metrics.json")
         if self.writer is not None:

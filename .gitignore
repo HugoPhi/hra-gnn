@@ -139,6 +139,7 @@ data/ProcessedData_TraceLog/*
 !data/ProcessedData_TraceLog/.gitkeep
 artifacts/*
 !artifacts/.gitkeep
+external/
 
 # Spyder project settings
 .spyderproject
