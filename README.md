@@ -279,9 +279,14 @@ checkpoint 由无标签验证 SVDD 损失选择，AUC/AP 仅用于监控。
   --input artifacts/results/suites/baselines_flowgraph/runs.csv \
   --input artifacts/results/suites/baselines_hdfs/runs.csv \
   --input artifacts/results/suites/baselines_adfa_ld/runs.csv \
+  --aggregation best \
+  --selection-metric auc \
   --summary-csv artifacts/results/tables/all_models_summary.csv \
   --output artifacts/results/tables/all_models_all_metrics.tex
 ```
+
+当前论文主表按 AUROC 选择每个模型、每个数据集的最佳真实运行，并报告该运行
+对应的全部指标，不跨 seed 拼接各列。各 seed 原始结果仍保留在 `runs.csv`。
 
 生成的表使用 `booktabs`、`graphicx` 和 `rotating`。
 
