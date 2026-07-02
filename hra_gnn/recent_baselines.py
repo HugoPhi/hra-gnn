@@ -608,3 +608,239 @@ def run_signet_fair(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return summary
+
+
+def run_muse_fair(
+    config: dict[str, Any], *, external_root: str | Path = "external"
+) -> dict[str, Any]:
+    try:
+        from torch_geometric.data import Data
+        from torch_geometric.utils import to_dense_adj
+    except ImportError as exc:
+        raise RuntimeError("MUSE requires requirements-baselines.txt") from exc
+
+    baseline = config.get("recent_baseline", {})
+    seed = int(config["training"].get("seed", 42))
+    seed_everything(seed)
+    device = resolve_device(config["training"].get("device", "auto"))
+    dataset = load_dataset(config["dataset"])
+    splits = _limited_splits(
+        dataset,
+        _splits(config, dataset),
+        baseline.get("max_graphs_per_split"),
+    )
+    selected = sorted({index for values in splits.values() for index in values})
+    index_map = {dataset_index: local for local, dataset_index in enumerate(selected)}
+    local_splits = {
+        split: [index_map[index] for index in indices]
+        for split, indices in splits.items()
+    }
+    graphs = []
+    graph_ids = []
+    max_dense_nodes = int(baseline.get("muse_max_dense_nodes", 2048))
+    for index in selected:
+        source = dataset[index]
+        if source.num_nodes > max_dense_nodes:
+            raise RuntimeError(
+                f"MUSE dense adjacency limit exceeded: graph {source.graph_id} "
+                f"has {source.num_nodes} nodes, limit is {max_dense_nodes}"
+            )
+        graphs.append(
+            Data(
+                x=source.x.float(),
+                edge_index=source.edge_index.long(),
+                y=torch.tensor([source.label], dtype=torch.long),
+            )
+        )
+        graph_ids.append(source.graph_id)
+
+    official_root = Path(external_root) / "MUSE"
+    gnns = _official_module_with_path(
+        official_root / "GNNs.py", f"official_muse_gnns_{seed}"
+    )
+    source_module = _official_module_with_path(
+        official_root / "src.py", f"official_muse_src_{seed}"
+    )
+    hidden_dim = int(baseline.get("hidden_dim", 32))
+    layers = int(baseline.get("num_layers", 3))
+    representation_epochs = int(
+        baseline.get("muse_representation_epochs", config["training"].get("epochs", 100))
+    )
+    classifier_epochs = int(baseline.get("muse_classifier_epochs", 100))
+    representation_batch = int(
+        baseline.get("muse_representation_batch_size", 16)
+    )
+    model = gnns.GIN(
+        num_features=int(graphs[0].x.shape[1]),
+        num_classes=1,
+        hidden_units=hidden_dim,
+        num_layers=layers,
+        dropout=0.3,
+        mlp_layers=2,
+        train_eps=False,
+    ).to(device)
+    edge_decoder = gnns.MLP_Decoder(
+        layers * hidden_dim, hidden_dim, hidden_dim
+    ).to(device)
+    feature_decoder = gnns.MLP_Decoder(
+        layers * hidden_dim, hidden_dim, int(graphs[0].x.shape[1])
+    ).to(device)
+
+    adjacency_labels = []
+    positive_weights = []
+    for graph in graphs:
+        adjacency = to_dense_adj(graph.edge_index)[0]
+        adjacency.fill_diagonal_(1.0)
+        flattened = adjacency.flatten().to(device)
+        positives = flattened.sum().clamp_min(1.0)
+        positive_weights.append(
+            ((flattened.numel() - positives) / positives).clamp_min(1e-6)
+        )
+        adjacency_labels.append(flattened)
+
+    trainer = source_module.MUSE_representation_learning(
+        datasets=graphs,
+        device=device,
+        labels=adjacency_labels,
+        labels_pos_weights=positive_weights,
+    )
+    training_start = time.perf_counter()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+    losses, parameters = trainer.train(
+        model=model,
+        feature_head=feature_decoder,
+        edge_head=edge_decoder,
+        train_idxs=local_splits["train"],
+        lr=float(config["training"].get("learning_rate", 1e-3)),
+        weight_decay=float(config["training"].get("weight_decay", 1e-6)),
+        epochs=representation_epochs,
+        saving_interval=representation_epochs,
+        batch_size=representation_batch,
+        return_loss=True,
+        seed=seed,
+    )
+    if not parameters:
+        raise RuntimeError("MUSE representation training produced no checkpoint")
+    extractor = source_module.MUSE_oneclass_classification(
+        model=model,
+        feature_encoder=feature_decoder,
+        edge_encoder=edge_decoder,
+        datasets=graphs,
+        device=device,
+        labels=adjacency_labels,
+        pos_weights=positive_weights,
+        B_size=int(baseline.get("muse_extraction_batch_size", 16)),
+    )
+    extractor.obtain_error_representations(parameters[-1], local_splits["train"])
+    features = extractor.TX
+    classifier = gnns.AutoEncoderOneclassClassifier(
+        in_dim=4,
+        hid_dim=int(baseline.get("muse_classifier_hidden_dim", 64)),
+        n_layers=3,
+        drop_p=0.0,
+    ).to(device)
+    optimizer = torch.optim.Adam(
+        classifier.parameters(),
+        lr=float(baseline.get("muse_classifier_lr", 1e-3)),
+        weight_decay=float(baseline.get("muse_classifier_weight_decay", 1e-4)),
+    )
+    train_index = torch.tensor(local_splits["train"], device=device)
+    classifier_history = []
+    for epoch in range(1, classifier_epochs + 1):
+        classifier.train()
+        optimizer.zero_grad()
+        reconstructed = classifier(features[train_index])
+        loss = torch.sqrt(
+            (reconstructed - features[train_index]).square().sum(dim=1)
+        ).mean()
+        loss.backward()
+        optimizer.step()
+        classifier_history.append(float(loss.detach()))
+        print(f"[MUSE-fair] classifier_epoch={epoch} loss={loss:.6f}", flush=True)
+
+    classifier.eval()
+    with torch.no_grad():
+        train_reconstructed = classifier(features[train_index])
+        scale = train_reconstructed.std(dim=0).clamp_min(1e-6)
+
+        def score(indices):
+            index_tensor = torch.tensor(indices, device=device)
+            reconstructed = classifier(features[index_tensor])
+            return (
+                ((reconstructed - features[index_tensor]).square() / scale)
+                .sum(dim=1)
+                .cpu()
+                .tolist()
+            )
+
+        train_scores = score(local_splits["train"])
+        test_scores = score(local_splits["test"])
+    threshold = normal_score_threshold(
+        train_scores,
+        float(config["evaluation"].get("threshold_quantile", 0.99)),
+    )
+    test_labels = [dataset[index].label for index in splits["test"]]
+    metrics = anomaly_metrics(
+        test_labels,
+        test_scores,
+        threshold=threshold,
+        alert_fraction=float(config["evaluation"].get("alert_fraction", 0.01)),
+        target_fpr=float(config["evaluation"].get("target_fpr", 0.01)),
+    )
+    output = (
+        Path(config["output"].get("results_root", "artifacts/results"))
+        / config["dataset"]["name"]
+        / "MUSE-fair"
+        / f"seed_{seed}"
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "epoch": range(1, representation_epochs + 1),
+            "adjacency_loss": losses[0],
+            "feature_loss": losses[1],
+        }
+    ).to_csv(output / "representation_history.csv", index=False)
+    pd.DataFrame(
+        {
+            "epoch": range(1, classifier_epochs + 1),
+            "loss": classifier_history,
+        }
+    ).to_csv(output / "classifier_history.csv", index=False)
+    test_graph_ids = [dataset[index].graph_id for index in splits["test"]]
+    pd.DataFrame(
+        {
+            "graph_id": test_graph_ids,
+            "label": test_labels,
+            "score": test_scores,
+        }
+    ).to_csv(output / "test_predictions.csv", index=False)
+    summary = {
+        **metrics,
+        "dataset": config["dataset"]["name"],
+        "variant": "MUSE-fair",
+        "seed": seed,
+        "epochs_completed": representation_epochs,
+        "classifier_epochs": classifier_epochs,
+        "training_seconds": time.perf_counter() - training_start,
+        "parameters": parameter_count(model)
+        + parameter_count(feature_decoder)
+        + parameter_count(edge_decoder)
+        + parameter_count(classifier),
+        "peak_gpu_memory_mb": (
+            torch.cuda.max_memory_allocated(device) / (1024**2)
+            if device.type == "cuda"
+            else 0.0
+        ),
+        "device": str(device),
+        "checkpoint_selection": "fixed_epoch",
+        "threshold_source": "normal_train_scores",
+        "official_source": str(official_root),
+        "train_graphs": len(local_splits["train"]),
+        "dense_adjacency_limit": max_dense_nodes,
+    }
+    (output / "metrics.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return summary

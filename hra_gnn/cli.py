@@ -18,7 +18,11 @@ from .plotting import (
     plot_training_history,
 )
 from .preprocessing import prepare_adfa_ld, prepare_hdfs
-from .recent_baselines import run_dual_view_fair, run_signet_fair
+from .recent_baselines import (
+    run_dual_view_fair,
+    run_muse_fair,
+    run_signet_fair,
+)
 from .reporting import DEFAULT_METRICS, summarize_runs, write_latex_table
 from .trainer import Trainer, evaluate_checkpoint
 
@@ -76,7 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     fair = subparsers.add_parser("fair-baseline")
     fair.add_argument("--config", required=True)
     fair.add_argument(
-        "--model", required=True, choices=("signet", "cvtgad", "gladmamba")
+        "--model",
+        required=True,
+        choices=("signet", "cvtgad", "muse", "gladmamba"),
     )
     fair.add_argument("--external-root", default="external")
     fair.add_argument(
@@ -182,6 +188,10 @@ def main() -> None:
         config = _config(arguments)
         if arguments.model == "signet":
             summary = run_signet_fair(
+                config, external_root=arguments.external_root
+            )
+        elif arguments.model == "muse":
+            summary = run_muse_fair(
                 config, external_root=arguments.external_root
             )
         else:
