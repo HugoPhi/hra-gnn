@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 from hra_gnn.config import load_config, merge_config
 from hra_gnn.trainer import Trainer
@@ -62,3 +63,7 @@ def test_tensorboard_monitoring_writes_two_split_metrics(tmp_path: Path) -> None
     assert "monitor_test_ap" in history
     event_files = list((tmp_path / "tensorboard").rglob("events.out.tfevents.*"))
     assert event_files
+    accumulator = EventAccumulator(str(event_files[0]))
+    accumulator.Reload()
+    assert "Synthetic/AP/validation" in accumulator.Tags()["scalars"]
+    assert "Synthetic/AP/test" in accumulator.Tags()["scalars"]

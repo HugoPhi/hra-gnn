@@ -179,6 +179,7 @@ class Trainer:
         root = Path(self.monitoring.get("log_dir", "artifacts/tensorboard"))
         dataset_name = self.config["dataset"]["name"]
         run_name = self.config["output"].get("run_name", "hra_full")
+        self.tensorboard_prefix = dataset_name
         writer = SummaryWriter(
             root / dataset_name / run_name / f"seed_{self.seed}",
             flush_secs=int(self.monitoring.get("flush_seconds", 10)),
@@ -188,15 +189,24 @@ class Trainer:
                 dataset_name: {
                     "SVDD Loss: train/test": [
                         "Multiline",
-                        ["Loss/train", "Loss/test"],
+                        [
+                            f"{dataset_name}/Loss/train",
+                            f"{dataset_name}/Loss/test",
+                        ],
                     ],
                     "AUC: validation/test": [
                         "Multiline",
-                        ["AUC/validation", "AUC/test"],
+                        [
+                            f"{dataset_name}/AUC/validation",
+                            f"{dataset_name}/AUC/test",
+                        ],
                     ],
                     "AP: validation/test": [
                         "Multiline",
-                        ["AP/validation", "AP/test"],
+                        [
+                            f"{dataset_name}/AP/validation",
+                            f"{dataset_name}/AP/test",
+                        ],
                     ],
                 }
             }
@@ -484,18 +494,31 @@ class Trainer:
                     row["monitor_test_auc"] = monitor_test["auc"]
                     row["monitor_test_ap"] = monitor_test["ap"]
                     row["monitor_test_svdd_loss"] = monitor_test["mean_svdd_loss"]
-                    self.writer.add_scalar("Loss/train", row["svdd_loss"], epoch)
+                    prefix = self.tensorboard_prefix
                     self.writer.add_scalar(
-                        "Loss/test", monitor_test["mean_svdd_loss"], epoch
+                        f"{prefix}/Loss/train", row["svdd_loss"], epoch
                     )
                     self.writer.add_scalar(
-                        "AUC/validation", monitor_validation["auc"], epoch
+                        f"{prefix}/Loss/test",
+                        monitor_test["mean_svdd_loss"],
+                        epoch,
                     )
-                    self.writer.add_scalar("AUC/test", monitor_test["auc"], epoch)
                     self.writer.add_scalar(
-                        "AP/validation", monitor_validation["ap"], epoch
+                        f"{prefix}/AUC/validation",
+                        monitor_validation["auc"],
+                        epoch,
                     )
-                    self.writer.add_scalar("AP/test", monitor_test["ap"], epoch)
+                    self.writer.add_scalar(
+                        f"{prefix}/AUC/test", monitor_test["auc"], epoch
+                    )
+                    self.writer.add_scalar(
+                        f"{prefix}/AP/validation",
+                        monitor_validation["ap"],
+                        epoch,
+                    )
+                    self.writer.add_scalar(
+                        f"{prefix}/AP/test", monitor_test["ap"], epoch
+                    )
                     self.writer.flush()
             history.append(row)
             pd.DataFrame(history).to_csv(history_path, index=False)
