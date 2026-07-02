@@ -114,6 +114,18 @@ def _limited_splits(dataset, splits, maximum):
     return limited
 
 
+def _evaluation_loader(graphs, batch_size):
+    from torch_geometric.loader import DataLoader
+
+    batches = [
+        list(range(start, min(start + batch_size, len(graphs))))
+        for start in range(0, len(graphs), batch_size)
+    ]
+    if len(batches) > 1 and len(batches[-1]) == 1:
+        batches[-1].insert(0, batches[-2].pop())
+    return DataLoader(graphs, batch_sampler=batches)
+
+
 def _score_loader(model, loader, device, args, mamba, statistics):
     labels: list[int] = []
     scores: list[float] = []
@@ -195,20 +207,22 @@ def run_dual_view_fair(
         mamba=mamba,
     )
     batch_size = int(config["training"].get("batch_size", 32))
+    if batch_size < 2:
+        raise ValueError(
+            "CVTGAD/GLADMamba need batch_size >= 2 for graph contrastive negatives"
+        )
     train_loader = DataLoader(
         [graphs[index] for index in dataset_splits["train"]],
         batch_size=batch_size,
         shuffle=True,
+        drop_last=True,
     )
-    train_eval_loader = DataLoader(
-        [graphs[index] for index in dataset_splits["train"]],
-        batch_size=batch_size,
-        shuffle=False,
+    train_eval_loader = _evaluation_loader(
+        [graphs[index] for index in dataset_splits["train"]], batch_size
     )
-    test_loader = DataLoader(
+    test_loader = _evaluation_loader(
         [graphs[index] for index in dataset_splits["test"]],
-        batch_size=int(config["evaluation"].get("batch_size", batch_size)),
-        shuffle=False,
+        int(config["evaluation"].get("batch_size", batch_size)),
     )
 
     official_name = "GLADMamba" if mamba else "CVTGAD"
