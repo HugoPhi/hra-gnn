@@ -54,6 +54,18 @@ TABLE_ADAPTATION_NOTE = (
     "需在统一预算下重跑。"
 )
 
+HRA_SEED_SWEEP_NOTE = (
+    "说明：粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳"
+    "同时加粗。所有方法沿用预定义数据划分、节点特征和正常样本单类训练协议。"
+    "SIGNET、CVTGAD、MUSE、GLADMamba 基于官方实现接入统一评测；"
+    "DeepTraLog、GLocalKD、HGT、OCHetGCN 为依据论文机制实现的统一"
+    " GraphSample 版本；ADFA-LD 使用 edge-only 关系模式；MUSE 因稠密邻接"
+    "复杂度未在 FlowGraph 上运行。每行按 AUROC 选择最佳真实运行，AP 取自同一"
+    "随机种子。HRA-GNN 汇总 22 个预声明候选种子，多数对比方法仅汇总 3 个种子，"
+    "因此该表反映最佳可达结果，不代表相同搜索预算下的稳定性能。各方法的受控"
+    "采样上限尚未完全统一，最终公平比较仍需统一预算。"
+)
+
 
 def _escape(value: object) -> str:
     return (
@@ -128,6 +140,7 @@ def write_latex_table(
     caption: str = "不同模型在多个数据集上的异常检测结果",
     label: str = "tab:multi_dataset_results",
     highlight_ranks: bool = False,
+    note: str = TABLE_ADAPTATION_NOTE,
 ) -> Path:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +162,7 @@ def write_latex_table(
         )
     ]
     columns = "ll" + "c" * len(metrics)
+    wide_table = len(metrics) > 4
     lines = [
         r"% 需要 \usepackage{booktabs,graphicx,multirow}",
         r"\begin{table*}[t]",
@@ -158,10 +172,10 @@ def write_latex_table(
         r"\setlength{\tabcolsep}{3pt}",
         rf"\caption{{{caption}}}",
         rf"\label{{{label}}}",
-        r"\resizebox{\textwidth}{!}{%",
-        rf"\begin{{tabular}}{{{columns}}}",
-        r"\toprule",
     ]
+    if wide_table:
+        lines.append(r"\resizebox{\textwidth}{!}{%")
+    lines.extend([rf"\begin{{tabular}}{{{columns}}}", r"\toprule"])
     header = ["数据集", "模型"] + [
         DISPLAY_NAMES.get(metric, _escape(metric)) for metric in metrics
     ]
@@ -213,14 +227,15 @@ def write_latex_table(
             lines.append(" & ".join(row) + r" \\")
         if dataset_index < len(datasets) - 1:
             lines.append(r"\midrule")
+    lines.extend([r"\bottomrule", r"\end{tabular}%"])
+    if wide_table:
+        lines.append(r"}")
     lines.extend(
         [
-            r"\bottomrule",
-            r"\end{tabular}%",
-            r"}",
+            r"\par\vspace{2pt}",
             r"\begin{minipage}{\textwidth}",
             r"\scriptsize",
-            _escape(TABLE_ADAPTATION_NOTE),
+            _escape(note),
             r"\end{minipage}",
             r"\end{table*}",
             "",

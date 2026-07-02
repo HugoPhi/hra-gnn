@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from hra_gnn.reporting import summarize_runs, write_latex_table
+from hra_gnn.reporting import (
+    HRA_SEED_SWEEP_NOTE,
+    summarize_runs,
+    write_latex_table,
+)
 
 
 def test_latex_table_contains_models_datasets_and_metrics(tmp_path: Path) -> None:
@@ -146,3 +150,20 @@ def test_best_and_second_best_are_highlighted_per_dataset(tmp_path: Path) -> Non
     assert r"A & \textbf{0.9000} & 0.7000" in text
     assert r"B & \underline{0.8000} & \textbf{0.9000}" in text
     assert r"C & 0.7000 & \underline{0.8000}" in text
+    assert r"\resizebox{\textwidth}" not in text
+
+
+def test_seed_sweep_note_discloses_unequal_search_budget(tmp_path: Path) -> None:
+    summary = pd.DataFrame(
+        [{"dataset": "HDFS", "method": "HRA-GNN", "auc_best": 0.8}]
+    )
+    output = write_latex_table(
+        summary,
+        tmp_path / "sweep.tex",
+        metrics=["auc"],
+        note=HRA_SEED_SWEEP_NOTE,
+    )
+    text = output.read_text(encoding="utf-8")
+
+    assert "HRA-GNN 汇总 22 个预声明候选种子" in text
+    assert "多数对比方法仅汇总 3 个种子" in text

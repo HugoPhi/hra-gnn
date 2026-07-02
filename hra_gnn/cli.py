@@ -24,7 +24,13 @@ from .recent_baselines import (
     run_signet_fair,
 )
 from .recent_experiments import run_fair_matrix
-from .reporting import DEFAULT_METRICS, summarize_runs, write_latex_table
+from .reporting import (
+    DEFAULT_METRICS,
+    HRA_SEED_SWEEP_NOTE,
+    TABLE_ADAPTATION_NOTE,
+    summarize_runs,
+    write_latex_table,
+)
 from .rescoring import rescore_calibrated_max
 from .trainer import Trainer, evaluate_checkpoint
 
@@ -77,6 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--highlight-ranks",
         action="store_true",
         help="bold the best and underline the second distinct value per dataset",
+    )
+    table.add_argument("--caption", default="不同模型在多个数据集上的异常检测结果")
+    table.add_argument("--label", default="tab:multi_dataset_results")
+    table.add_argument(
+        "--note-profile",
+        choices=("standard", "hra_seed_sweep"),
+        default="standard",
     )
 
     prepare = subparsers.add_parser("prepare-data")
@@ -187,7 +200,14 @@ def main() -> None:
             summary,
             arguments.output,
             metrics=arguments.metrics,
+            caption=arguments.caption,
+            label=arguments.label,
             highlight_ranks=arguments.highlight_ranks,
+            note=(
+                HRA_SEED_SWEEP_NOTE
+                if arguments.note_profile == "hra_seed_sweep"
+                else TABLE_ADAPTATION_NOTE
+            ),
         )
         print(f"Wrote {output.resolve()}")
     elif arguments.command == "prepare-data":
