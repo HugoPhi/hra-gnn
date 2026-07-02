@@ -103,6 +103,9 @@ def _limited_splits(dataset, splits, maximum):
         by_label: dict[int, list[int]] = {}
         for index in indices:
             by_label.setdefault(int(dataset[index].label), []).append(index)
+        if not by_label:
+            limited[split] = []
+            continue
         if len(by_label) == 1:
             limited[split] = indices[:maximum]
             continue
