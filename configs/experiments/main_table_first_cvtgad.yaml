@@ -1,0 +1,29 @@
+name: main_table_first_cvtgad
+evidence_level: first_main_table_not_final
+results_root: artifacts/results/fair_matrix
+external_root: external
+seeds: [11, 22, 33]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: cvtgad
+    overrides: &cvtgad_common
+      - training.epochs=30
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.reference_graphs=64
+      - recent_baseline.max_graphs_per_split=1000
+  - config: ../flowgraph.yaml
+    model: cvtgad
+    overrides:
+      - training.epochs=30
+      - training.batch_size=2
+      - evaluation.batch_size=2
+      - recent_baseline.reference_graphs=16
+      - recent_baseline.max_graphs_per_split=64
+  - config: ../hdfs.yaml
+    model: cvtgad
+    overrides: *cvtgad_common
+  - config: ../adfa_ld.yaml
+    model: cvtgad
+    overrides: *cvtgad_common

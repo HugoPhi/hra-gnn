@@ -62,6 +62,17 @@ def build_parser() -> argparse.ArgumentParser:
     table.add_argument("--output", required=True)
     table.add_argument("--summary-csv")
     table.add_argument("--metrics", nargs="+", default=list(DEFAULT_METRICS))
+    table.add_argument(
+        "--aggregation",
+        choices=("mean_std", "best"),
+        default="mean_std",
+        help="aggregate all runs or select one real run by its best metric",
+    )
+    table.add_argument(
+        "--selection-metric",
+        default="auc",
+        help="metric used to select a run when --aggregation=best",
+    )
 
     prepare = subparsers.add_parser("prepare-data")
     prepare.add_argument("--kind", required=True, choices=("hdfs", "adfa-ld"))
@@ -157,7 +168,12 @@ def main() -> None:
         root, rows = run_experiment_suite(arguments.suite, resume=not arguments.force)
         print(f"Wrote {len(rows)} runs to {root}")
     elif arguments.command == "table":
-        summary = summarize_runs(arguments.input, arguments.metrics)
+        summary = summarize_runs(
+            arguments.input,
+            arguments.metrics,
+            aggregation=arguments.aggregation,
+            selection_metric=arguments.selection_metric,
+        )
         if arguments.summary_csv:
             summary_path = Path(arguments.summary_csv)
             summary_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,20 @@
+name: main_table_first_muse
+evidence_level: first_main_table_not_final
+results_root: artifacts/results/fair_matrix
+external_root: external
+seeds: [11, 22, 33]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: muse
+    overrides: &muse_common
+      - recent_baseline.muse_representation_epochs=30
+      - recent_baseline.muse_classifier_epochs=100
+      - recent_baseline.max_graphs_per_split=1000
+      - recent_baseline.muse_max_dense_nodes=5000
+  - config: ../hdfs.yaml
+    model: muse
+    overrides: *muse_common
+  - config: ../adfa_ld.yaml
+    model: muse
+    overrides: *muse_common

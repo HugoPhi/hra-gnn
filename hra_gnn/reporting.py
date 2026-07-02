@@ -41,6 +41,9 @@ def _escape(value: object) -> str:
 def summarize_runs(
     inputs: Iterable[str | Path],
     metrics: Iterable[str] = DEFAULT_METRICS,
+    *,
+    aggregation: str = "mean_std",
+    selection_metric: str = "auc",
 ) -> pd.DataFrame:
     frames = [pd.read_csv(path) for path in inputs]
     if not frames:
@@ -54,6 +57,33 @@ def summarize_runs(
     if not available:
         raise ValueError("None of the requested metrics are present")
     runs = runs.rename(columns={method_column: "method"})
+    if "status" in runs:
+        runs = runs[runs["status"].fillna("complete") == "complete"]
+    if aggregation == "best":
+        if selection_metric not in runs:
+            raise ValueError(
+                f"Selection metric is missing from result CSV: {selection_metric}"
+            )
+        eligible = runs.dropna(subset=[selection_metric])
+        if eligible.empty:
+            raise ValueError(f"No finite {selection_metric} values are available")
+        selected = eligible.loc[
+            eligible.groupby(["method", "dataset"], dropna=False)[selection_metric]
+            .idxmax()
+            .tolist()
+        ].copy()
+        columns = ["method", "dataset"]
+        if "seed" in selected:
+            selected = selected.rename(columns={"seed": "selected_seed"})
+            columns.append("selected_seed")
+        for metric in available:
+            selected = selected.rename(columns={metric: f"{metric}_best"})
+            columns.append(f"{metric}_best")
+        selected["selection_metric"] = selection_metric
+        columns.append("selection_metric")
+        return selected[columns].reset_index(drop=True)
+    if aggregation != "mean_std":
+        raise ValueError(f"Unsupported aggregation mode: {aggregation}")
     grouped = runs.groupby(["method", "dataset"], dropna=False)[available].agg(
         ["mean", "std", "count"]
     )
@@ -72,10 +102,15 @@ def write_latex_table(
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     datasets = summary["dataset"].drop_duplicates().tolist()
+    best_mode = any(f"{metric}_best" in summary for metric in metrics)
     metrics = [
         metric
         for metric in metrics
-        if f"{metric}_mean" in summary and f"{metric}_std" in summary
+        if (
+            f"{metric}_best" in summary
+            if best_mode
+            else f"{metric}_mean" in summary and f"{metric}_std" in summary
+        )
     ]
     columns = "l" + "c" * (len(datasets) * len(metrics))
     lines = [
@@ -120,6 +155,10 @@ def write_latex_table(
                 continue
             values = indexed.loc[(method, dataset)]
             for metric in metrics:
+                if best_mode:
+                    best = values[f"{metric}_best"]
+                    row.append("--" if pd.isna(best) else f"{best:.4f}")
+                    continue
                 mean = values[f"{metric}_mean"]
                 std = values[f"{metric}_std"]
                 if pd.isna(mean):
