@@ -126,6 +126,44 @@ def _evaluation_loader(graphs, batch_size):
     return DataLoader(graphs, batch_sampler=batches)
 
 
+def _contrastive_losses(outputs, batch, temperature=0.2):
+    from torch_geometric.nn import global_mean_pool
+
+    def similarity(left, right):
+        left = torch.nn.functional.normalize(left, dim=1, eps=1e-12)
+        right = torch.nn.functional.normalize(right, dim=1, eps=1e-12)
+        return torch.exp((left @ right.T / temperature).clamp(max=50.0))
+
+    graph_similarity = similarity(outputs[0], outputs[1])
+    graph_positive = graph_similarity.diag()
+    graph_negative_columns = (
+        graph_similarity.sum(dim=0) - graph_positive
+    ).clamp_min(1e-12)
+    graph_negative_rows = (
+        graph_similarity.sum(dim=1) - graph_positive
+    ).clamp_min(1e-12)
+    graph_loss = -0.5 * (
+        torch.log(graph_positive / graph_negative_columns + 1e-12)
+        + torch.log(graph_positive / graph_negative_rows + 1e-12)
+    )
+
+    node_similarity = similarity(outputs[2], outputs[3])
+    same_graph = batch[:, None] == batch[None, :]
+    node_similarity = node_similarity * same_graph
+    node_positive = node_similarity.diag()
+    node_negative_columns = (
+        node_similarity.sum(dim=0) - node_positive
+    ).clamp_min(1e-12)
+    node_negative_rows = (
+        node_similarity.sum(dim=1) - node_positive
+    ).clamp_min(1e-12)
+    node_loss = -0.5 * (
+        torch.log(node_positive / node_negative_columns + 1e-12)
+        + torch.log(node_positive / node_negative_rows + 1e-12)
+    )
+    return graph_loss, global_mean_pool(node_loss, batch)
+
+
 def _score_loader(model, loader, device, args, mamba, statistics):
     labels: list[int] = []
     scores: list[float] = []
@@ -152,8 +190,7 @@ def _score_loader(model, loader, device, args, mamba, statistics):
                     data.batch,
                     data.num_graphs,
                 )
-            graph_loss = model.calc_loss_g(outputs[0], outputs[1])
-            node_loss = model.calc_loss_n(outputs[2], outputs[3], data.batch)
+            graph_loss, node_loss = _contrastive_losses(outputs, data.batch)
             if args.is_adaptive:
                 score = (
                     (graph_loss - statistics["mean_g"]) / statistics["std_g"]
@@ -290,8 +327,7 @@ def run_dual_view_fair(
                     data.batch,
                     data.num_graphs,
                 )
-            graph_loss = model.calc_loss_g(outputs[0], outputs[1])
-            node_loss = model.calc_loss_n(outputs[2], outputs[3], data.batch)
+            graph_loss, node_loss = _contrastive_losses(outputs, data.batch)
             if arguments.is_adaptive and epoch > 1:
                 weight_g = statistics["std_g"] ** arguments.alpha
                 weight_n = statistics["std_n"] ** arguments.alpha
@@ -373,6 +409,7 @@ def run_dual_view_fair(
         "threshold_source": "normal_train_scores",
         "official_source": str(Path(external_root) / official_name),
         "train_graphs": len(train_labels),
+        "numerically_stabilized": True,
     }
     (output / "metrics.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
