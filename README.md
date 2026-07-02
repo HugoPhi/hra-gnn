@@ -287,6 +287,18 @@ SIGNET、CVTGAD、MUSE、GLADMamba 的官方仓库和 commit 已锁定在
 官方协议结果只负责验证实现；公平主表将使用本项目冻结的数据划分、共同输入和
 无标签 checkpoint 选择。详情见[数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)。
 
+CVTGAD/GLADMamba 公平入口：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python run.py fair-baseline \
+  --config configs/tracelog.yaml \
+  --model gladmamba \
+  --set training.seed=11
+```
+
+两种方法的图对比损失要求 `training.batch_size >= 2`。FlowGraph 图较大，
+CVTGAD 建议固定 `batch_size=2`，否则节点交叉注意力会产生极高的二次显存开销。
+
 ## 绘图
 
 主结果图：

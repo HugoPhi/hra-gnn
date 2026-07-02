@@ -89,3 +89,41 @@ PyG 2.6 已移除该模块路径。兼容 patch 改为从 `torch_geometric.utils
 4. checkpoint 不读取测试标签；
 5. 输出 AUROC、AP、预算指标、阈值指标和效率指标；
 6. 在 TraceLog、FlowGraph、HDFS、ADFA-LD 上运行五个 seed。
+
+## 6. Fair Runner 第一轮验收
+
+CVTGAD 和 GLADMamba 已完成公平 runner：
+
+- 使用项目冻结 split；
+- 训练只读取正常图；
+- 固定 epoch，不根据测试 AUC 选择 checkpoint；
+- 测试标签只在最终指标计算时读取；
+- 阈值来自正常训练分数；
+- 输出 AUROC、AP、预算指标、F1/MCC、参数量和显存。
+
+### 6.1 TraceLog，128 图/split，1 epoch
+
+| 模型 | AUROC | AP | 峰值显存 |
+|---|---:|---:|---:|
+| CVTGAD-fair | 0.5435 | 0.5982 | 2523.7 MB |
+| GLADMamba-fair | 0.5803 | 0.5188 | 2061.0 MB |
+
+### 6.2 FlowGraph，32 图/split，1 epoch，seed 11
+
+| 模型 | AUROC | AP | F1 | 峰值显存 |
+|---|---:|---:|---:|---:|
+| CVTGAD-fair | 0.5469 | 0.4934 | 0.0833 | 8860.9 MB |
+| GLADMamba-fair | 0.7656 | 0.6565 | 0.7317 | 6191.9 MB |
+
+以上仍是链路测试，不是最终论文数值。
+
+### 6.3 FlowGraph 的方法约束
+
+CVTGAD 的节点交叉注意力对 batch 中全部节点形成稠密矩阵：
+
+- `batch_size=32` 尝试申请约 257 GB 显存并 OOM；
+- `batch_size=1` 没有图级对比负样本，官方损失必然除零；
+- `batch_size=2` 可运行，但单张 V100 上接近显存上限。
+
+此外，两种官方实现均未处理零范数嵌入，FlowGraph 会产生 `NaN/Inf`。公平 runner
+采用带 epsilon 的等价归一化，并在结果中标记 `numerically_stabilized=true`。
