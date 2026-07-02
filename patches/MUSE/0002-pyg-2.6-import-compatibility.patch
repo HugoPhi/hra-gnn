@@ -1,0 +1,13 @@
+diff --git a/data_loader.py b/data_loader.py
+index c1517ed..cfeb877 100644
+--- a/data_loader.py
++++ b/data_loader.py
+@@ -8,7 +8,7 @@ import torch_geometric
+ from torch_geometric.data import Data
+ from torch_geometric.datasets import TUDataset
+ from torch_geometric.utils import to_networkx
+-from torch_geometric.utils.subgraph import subgraph
++from torch_geometric.utils import subgraph
+ from torch_geometric.utils import to_networkx, to_dense_adj
+ from tqdm import tqdm
+ 

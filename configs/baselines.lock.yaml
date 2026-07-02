@@ -19,6 +19,7 @@ baselines:
     license_status: repository_has_no_license_file
     patches:
       - patches/MUSE/0001-add-reproducible-runtime-controls.patch
+      - patches/MUSE/0002-pyg-2.6-import-compatibility.patch
   GLADMamba:
     repository: https://github.com/Yali-F/GLADMamba.git
     commit: 2b2462c5ed257796290dfbf41d730d9d5e044358
