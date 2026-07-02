@@ -21,11 +21,19 @@ variants:
     ssl:
       enabled: false
   HRGCN:
+    training:
+      batch_size: 4
+    evaluation:
+      batch_size: 4
     model:
       architecture: hrgcn
       relation_fusion: static_concat
       readout: max
   HRA-GNN:
+    training:
+      batch_size: 4
+    evaluation:
+      batch_size: 4
     model:
       architecture: hra
       relation_fusion: deviation_attention
