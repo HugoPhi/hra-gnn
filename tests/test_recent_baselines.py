@@ -1,12 +1,14 @@
 from types import SimpleNamespace
 
 import torch
+import yaml
 
 from hra_gnn.recent_baselines import (
     _anchor_graph_loss,
     _limited_splits,
     _score_audit,
 )
+from hra_gnn.recent_experiments import run_fair_matrix
 
 
 def test_limited_splits_are_seeded_and_stratified() -> None:
@@ -57,3 +59,45 @@ def test_score_audit_reports_inverse_direction_without_flipping() -> None:
     assert audit["inverse_auc_diagnostic"] == 1.0
     assert audit["test_normal_score_median"] == 3.5
     assert audit["test_anomaly_score_median"] == 1.5
+
+
+def test_matrix_isolates_model_outputs_and_marks_evidence(
+    tmp_path, monkeypatch
+) -> None:
+    matrix_path = tmp_path / "matrix.yaml"
+    matrix_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "smoke",
+                "evidence_level": "smoke_do_not_cite",
+                "results_root": str(tmp_path / "results"),
+                "seeds": [11],
+                "jobs": [{"config": "dataset.yaml", "model": "signet"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+    base = {
+        "dataset": {"name": "Synthetic"},
+        "training": {"seed": 1},
+        "output": {"results_root": "would_be_overwritten"},
+        "recent_baseline": {},
+    }
+    monkeypatch.setattr("hra_gnn.recent_experiments.load_config", lambda _: base)
+
+    def fake_run(config, model, external_root):
+        captured.update(config)
+        return {
+            "dataset": "Synthetic",
+            "variant": "SIGNET-fair",
+            "seed": config["training"]["seed"],
+            "experimental_stage": config["recent_baseline"]["experimental_stage"],
+        }
+
+    monkeypatch.setattr("hra_gnn.recent_experiments._run_model", fake_run)
+    root, rows = run_fair_matrix(matrix_path, resume=False)
+
+    assert captured["output"]["results_root"] == str(root / "model_runs")
+    assert rows.iloc[0]["experimental_stage"] == "smoke_do_not_cite"
+    assert rows.iloc[0]["matrix"] == "smoke"

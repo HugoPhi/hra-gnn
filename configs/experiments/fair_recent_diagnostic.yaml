@@ -1,61 +1,61 @@
-name: fair_recent_smoke
-evidence_level: smoke_do_not_cite
+name: fair_recent_diagnostic
+evidence_level: diagnostic_not_final
 results_root: artifacts/results/fair_matrix
 external_root: external
-seeds: [11]
+seeds: [11, 22, 33]
 
 jobs:
   - config: ../tracelog.yaml
     model: signet
     overrides:
-      - training.epochs=1
+      - training.epochs=20
       - training.batch_size=32
       - evaluation.batch_size=32
-      - recent_baseline.max_graphs_per_split=128
+      - recent_baseline.reference_graphs=64
+      - recent_baseline.max_graphs_per_split=256
   - config: ../tracelog.yaml
     model: cvtgad
     overrides:
-      - training.epochs=1
+      - training.epochs=20
       - training.batch_size=32
       - evaluation.batch_size=32
-      - recent_baseline.max_graphs_per_split=128
+      - recent_baseline.reference_graphs=64
+      - recent_baseline.max_graphs_per_split=256
   - config: ../tracelog.yaml
     model: muse
     overrides:
-      - recent_baseline.muse_representation_epochs=1
-      - recent_baseline.muse_classifier_epochs=1
-      - recent_baseline.max_graphs_per_split=32
+      - recent_baseline.muse_representation_epochs=20
+      - recent_baseline.muse_classifier_epochs=50
+      - recent_baseline.max_graphs_per_split=64
   - config: ../tracelog.yaml
     model: gladmamba
     overrides:
-      - training.epochs=1
+      - training.epochs=20
       - training.batch_size=32
       - evaluation.batch_size=32
-      - recent_baseline.max_graphs_per_split=128
+      - recent_baseline.reference_graphs=64
+      - recent_baseline.max_graphs_per_split=256
   - config: ../flowgraph.yaml
     model: signet
     overrides:
-      - training.epochs=1
-      - training.batch_size=32
-      - evaluation.batch_size=32
+      - training.epochs=20
+      - training.batch_size=16
+      - evaluation.batch_size=16
+      - recent_baseline.reference_graphs=16
       - recent_baseline.max_graphs_per_split=64
   - config: ../flowgraph.yaml
     model: cvtgad
     overrides:
-      - training.epochs=1
+      - training.epochs=20
       - training.batch_size=2
       - evaluation.batch_size=2
-      - recent_baseline.max_graphs_per_split=32
-  - config: ../flowgraph.yaml
-    model: muse
-    overrides:
-      - recent_baseline.muse_representation_epochs=1
-      - recent_baseline.muse_classifier_epochs=1
+      - recent_baseline.reference_graphs=16
       - recent_baseline.max_graphs_per_split=32
   - config: ../flowgraph.yaml
     model: gladmamba
     overrides:
-      - training.epochs=1
+      - training.epochs=20
       - training.batch_size=2
       - evaluation.batch_size=2
+      - recent_baseline.reference_graphs=16
       - recent_baseline.max_graphs_per_split=32

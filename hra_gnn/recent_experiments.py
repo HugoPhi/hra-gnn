@@ -29,9 +29,7 @@ def _run_model(config: dict[str, Any], model: str, external_root: str | Path):
         return run_signet_fair(config, external_root=external_root)
     if model == "muse":
         return run_muse_fair(config, external_root=external_root)
-    return run_dual_view_fair(
-        config, architecture=model, external_root=external_root
-    )
+    return run_dual_view_fair(config, architecture=model, external_root=external_root)
 
 
 def _metrics_path(config: dict[str, Any], model: str, seed: int) -> Path:
@@ -52,7 +50,9 @@ def run_fair_matrix(
     root = Path(matrix.get("results_root", "artifacts/results/fair_matrix"))
     root = root / matrix["name"]
     root.mkdir(parents=True, exist_ok=True)
+    model_results_root = Path(matrix.get("model_results_root", root / "model_runs"))
     external_root = matrix.get("external_root", "external")
+    evidence_level = matrix.get("evidence_level", "diagnostic")
     seeds = [int(seed) for seed in matrix.get("seeds", [11, 22, 33, 44, 55])]
     rows: list[dict[str, Any]] = []
 
@@ -65,6 +65,8 @@ def run_fair_matrix(
         for seed in seeds:
             overrides = list(job.get("overrides", []))
             overrides.append(f"training.seed={seed}")
+            overrides.append(f"output.results_root={model_results_root}")
+            overrides.append(f"recent_baseline.experimental_stage={evidence_level}")
             config = apply_overrides(base, overrides)
             metrics_path = _metrics_path(config, model, seed)
             try:
@@ -72,13 +74,21 @@ def run_fair_matrix(
                     summary = json.loads(metrics_path.read_text(encoding="utf-8"))
                 else:
                     summary = _run_model(config, model, external_root)
-                rows.append({**summary, "status": "complete", "error": ""})
+                rows.append(
+                    {
+                        **summary,
+                        "matrix": matrix["name"],
+                        "status": "complete",
+                        "error": "",
+                    }
+                )
             except Exception as exc:
                 rows.append(
                     {
                         "dataset": config["dataset"]["name"],
                         "variant": MODEL_NAMES[model],
                         "seed": seed,
+                        "matrix": matrix["name"],
                         "status": "failed",
                         "error": f"{type(exc).__name__}: {exc}",
                     }
