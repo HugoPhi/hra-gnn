@@ -1,0 +1,11 @@
+diff --git a/main.py b/main.py
+index 4f6c485..7c9ef01 100644
+--- a/main.py
++++ b/main.py
+@@ -1,5 +1,5 @@
+ import os   
+-os.environ['CUDA_VISIBLE_DEVICES'] = '1'    #### specify gpu_id
++os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')    #### specify gpu_id
+ 
+ def warn(*args, **kwargs):
+     pass

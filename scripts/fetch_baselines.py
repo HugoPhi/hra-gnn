@@ -30,6 +30,7 @@ def main() -> None:
         raise ValueError(f"Unknown baselines: {sorted(unknown)}")
     root = Path(arguments.root)
     root.mkdir(parents=True, exist_ok=True)
+    project_root = lock_path.resolve().parent.parent
 
     for name, entry in entries.items():
         if name not in selected:
@@ -44,6 +45,23 @@ def main() -> None:
         ).strip()
         if actual != entry["commit"]:
             raise RuntimeError(f"{name}: expected {entry['commit']}, got {actual}")
+        for relative_patch in entry.get("patches", []):
+            patch = project_root / relative_patch
+            check = subprocess.run(
+                ["git", "apply", "--check", str(patch)],
+                cwd=destination,
+                check=False,
+            )
+            if check.returncode == 0:
+                run("git", "apply", str(patch), cwd=destination)
+            else:
+                reverse = subprocess.run(
+                    ["git", "apply", "--reverse", "--check", str(patch)],
+                    cwd=destination,
+                    check=False,
+                )
+                if reverse.returncode != 0:
+                    raise RuntimeError(f"{name}: cannot apply patch {patch}")
         print(f"{name}: {actual}")
 
 

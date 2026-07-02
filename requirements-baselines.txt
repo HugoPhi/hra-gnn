@@ -1,0 +1,10 @@
+# Optional dependencies for official SIGNET/CVTGAD/MUSE/GLADMamba adapters.
+# Install the torch-scatter wheel matching the server's PyTorch/CUDA build
+# separately from https://data.pyg.org/whl/.
+torch-geometric>=2.6,<2.7
+scipy>=1.11
+networkx>=3.2
+tqdm>=4.66
+einops>=0.8
+faiss-cpu>=1.8
+ogb>=1.3.6

@@ -276,6 +276,13 @@ SIGNET、CVTGAD、MUSE、GLADMamba 的官方仓库和 commit 已锁定在
 .venv/bin/python scripts/fetch_baselines.py
 ```
 
+服务器安装官方 baseline 的额外依赖：
+
+```bash
+.venv/bin/pip install -r requirements-baselines.txt
+# torch-scatter 必须选择与服务器 PyTorch/CUDA 对应的官方 PyG wheel。
+```
+
 官方协议结果只负责验证实现；公平主表将使用本项目冻结的数据划分、共同输入和
 无标签 checkpoint 选择。详情见[数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)。
 

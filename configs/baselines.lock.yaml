@@ -11,6 +11,8 @@ baselines:
     repository: https://github.com/jindongli-Ai/CVTGAD.git
     commit: dc5f896e3a3c61c43781c365395820d8688aa3bb
     license_status: repository_has_no_license_file
+    patches:
+      - patches/CVTGAD/0001-respect-cuda-visible-devices.patch
   MUSE:
     repository: https://github.com/kswoo97/GLAD_MUSE.git
     commit: 07da392034b6c4897a08de658abfb7a61bf09728
