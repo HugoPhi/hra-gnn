@@ -50,12 +50,7 @@ def test_tensorboard_monitoring_writes_two_split_metrics(tmp_path: Path) -> None
     )
     Trainer(config).train()
     history = pd.read_csv(
-        tmp_path
-        / "results"
-        / "Synthetic"
-        / "monitoring"
-        / "seed_10"
-        / "history.csv"
+        tmp_path / "results" / "Synthetic" / "monitoring" / "seed_10" / "history.csv"
     )
     assert "monitor_validation_auc" in history
     assert "monitor_test_auc" in history
@@ -67,3 +62,28 @@ def test_tensorboard_monitoring_writes_two_split_metrics(tmp_path: Path) -> None
     accumulator.Reload()
     assert "Synthetic/AP/validation" in accumulator.Tags()["scalars"]
     assert "Synthetic/AP/test" in accumulator.Tags()["scalars"]
+
+
+def test_evaluation_sampling_is_seeded_and_preserves_labels(
+    tmp_path: Path,
+) -> None:
+    base = load_config("configs/synthetic.yaml")
+    update = {
+        "training": {"seed": 17},
+        "evaluation": {
+            "max_graphs": 4,
+            "sampling": "seeded_stratified",
+        },
+        "output": {"results_root": str(tmp_path / "first")},
+    }
+    first = Trainer(merge_config(base, update))
+    update["output"]["results_root"] = str(tmp_path / "second")
+    second = Trainer(merge_config(base, update))
+
+    assert first.evaluation_splits["test"] == second.evaluation_splits["test"]
+    assert len(first.evaluation_splits["test"]) == 4
+    original_labels = [first._label_for_index(index) for index in first.splits["test"]]
+    sampled_labels = [
+        first._label_for_index(index) for index in first.evaluation_splits["test"]
+    ]
+    assert set(sampled_labels) == set(original_labels)

@@ -126,6 +126,9 @@ class Trainer:
             )
         self.monitoring = config.get("monitoring", {})
         self._configure_monitor_splits()
+        self.evaluation_splits = {
+            name: self._evaluation_indices(name) for name in self.splits
+        }
         self.model = build_model(config).to(self.device)
         self.augmentor = build_augmentor(config, self.seed)
         self.output_dir = result_directory(config, self.seed)
@@ -133,6 +136,10 @@ class Trainer:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         save_resolved_config(config, self.output_dir / "config.yaml")
         write_json(self.splits, self.output_dir / "splits.json")
+        write_json(
+            self.evaluation_splits,
+            self.output_dir / "evaluation_splits.json",
+        )
 
         training = config["training"]
         self.optimizer = torch.optim.Adam(
@@ -176,6 +183,41 @@ class Trainer:
         rng.shuffle(test)
         self.splits["monitor_validation"] = validation
         self.splits["monitor_test"] = test
+
+    def _evaluation_indices(self, split: str) -> list[int]:
+        indices = list(self.splits[split])
+        maximum = self.config["evaluation"].get("max_graphs")
+        sampling = self.config["evaluation"].get("sampling", "head")
+        if maximum is None or len(indices) <= int(maximum):
+            return indices
+        maximum = int(maximum)
+        if sampling != "seeded_stratified":
+            return indices[:maximum]
+
+        by_label: dict[int, list[int]] = {}
+        for index in indices:
+            by_label.setdefault(self._label_for_index(index), []).append(index)
+        rng = np.random.default_rng(
+            self.seed
+            + sum((position + 1) * ord(char) for position, char in enumerate(split))
+        )
+        allocation: dict[int, int] = {}
+        fractions: list[tuple[float, int]] = []
+        for label, values in by_label.items():
+            exact = maximum * len(values) / len(indices)
+            allocation[label] = int(math.floor(exact))
+            fractions.append((exact - allocation[label], label))
+        remaining = maximum - sum(allocation.values())
+        for _, label in sorted(fractions, reverse=True)[:remaining]:
+            allocation[label] += 1
+
+        selected: list[int] = []
+        for label, values in by_label.items():
+            candidates = np.asarray(values, dtype=np.int64)
+            rng.shuffle(candidates)
+            selected.extend(candidates[: allocation[label]].tolist())
+        rng.shuffle(selected)
+        return selected
 
     def _build_summary_writer(self) -> SummaryWriter | None:
         if not bool(self.monitoring.get("enabled", False)):
@@ -318,10 +360,7 @@ class Trainer:
         relation_rows: list[dict[str, Any]] = []
         elapsed: list[float] = []
 
-        split_indices = self.splits[split]
-        maximum = self.config["evaluation"].get("max_graphs")
-        if maximum is not None:
-            split_indices = split_indices[: int(maximum)]
+        split_indices = self.evaluation_splits[split]
         batch_size = int(
             self.config["evaluation"].get(
                 "batch_size", self.config["training"].get("batch_size", 8)
@@ -403,9 +442,7 @@ class Trainer:
             labels,
             scores,
             threshold=threshold,
-            alert_fraction=float(
-                self.config["evaluation"].get("alert_fraction", 0.01)
-            ),
+            alert_fraction=float(self.config["evaluation"].get("alert_fraction", 0.01)),
             target_fpr=float(self.config["evaluation"].get("target_fpr", 0.01)),
         )
         finite_svdd = [row["svdd_score"] for row in rows]
@@ -592,6 +629,14 @@ class Trainer:
             "device": str(self.device),
             "threshold_source": "normal_train_scores",
             "checkpoint_selection": "unlabeled_validation_svdd_loss",
+            "max_train_graphs_per_epoch": self.config["training"].get(
+                "max_train_graphs"
+            ),
+            "max_evaluation_graphs": self.config["evaluation"].get("max_graphs"),
+            "evaluation_sampling": self.config["evaluation"].get("sampling", "head"),
+            "experimental_stage": self.config.get("experiment", {}).get(
+                "stage", "paper_candidate"
+            ),
         }
         write_json(summary, self.output_dir / "metrics.json")
         if self.writer is not None:

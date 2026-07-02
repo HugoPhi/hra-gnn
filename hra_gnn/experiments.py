@@ -61,6 +61,7 @@ def run_experiment_suite(
     with path.open("r", encoding="utf-8") as handle:
         suite = yaml.safe_load(handle)
     base_config = load_config((path.parent / suite["base_config"]).resolve())
+    base_config = merge_config(base_config, suite.get("common", {}))
     suite_name = suite["name"]
     root = (
         Path(

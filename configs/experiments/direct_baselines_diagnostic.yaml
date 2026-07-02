@@ -1,0 +1,57 @@
+name: direct_baselines_diagnostic
+base_config: ../tracelog.yaml
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: diagnostic_not_final
+  training:
+    epochs: 15
+    batch_size: 16
+    max_train_graphs: 2000
+    early_stopping_patience: 4
+  evaluation:
+    max_graphs: 4000
+    sampling: seeded_stratified
+
+variants:
+  OCHetGCN:
+    model:
+      architecture: ochetgcn
+      relation_fusion: static_concat
+      readout: max
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  GLocalKD:
+    model:
+      architecture: glocalkd
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HGT:
+    model:
+      architecture: hgt
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  DeepTraLog:
+    model:
+      architecture: deeptralog
+    ssl:
+      enabled: false
+    evaluation:
+      score_ssl_weight: 0.0
+  HRGCN:
+    model:
+      architecture: hrgcn
+      relation_fusion: static_concat
+      readout: max
+  HRA-GNN:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
