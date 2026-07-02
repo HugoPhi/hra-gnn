@@ -23,6 +23,7 @@ from .recent_baselines import (
     run_muse_fair,
     run_signet_fair,
 )
+from .recent_experiments import run_fair_matrix
 from .reporting import DEFAULT_METRICS, summarize_runs, write_latex_table
 from .trainer import Trainer, evaluate_checkpoint
 
@@ -88,6 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     fair.add_argument(
         "--set", action="append", default=[], help="YAML override: key=value"
     )
+
+    fair_matrix = subparsers.add_parser("fair-matrix")
+    fair_matrix.add_argument("--matrix", required=True)
+    fair_matrix.add_argument("--force", action="store_true")
 
     plot = subparsers.add_parser("plot")
     plot.add_argument(
@@ -201,6 +206,12 @@ def main() -> None:
                 external_root=arguments.external_root,
             )
         print(json.dumps(summary, indent=2))
+    elif arguments.command == "fair-matrix":
+        root, rows = run_fair_matrix(
+            arguments.matrix, resume=not arguments.force
+        )
+        complete = int((rows["status"] == "complete").sum())
+        print(f"Wrote {len(rows)} runs ({complete} complete) to {root.resolve()}")
     elif arguments.command == "plot":
         functions = {
             "comparison": plot_main_comparison,

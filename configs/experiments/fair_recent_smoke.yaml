@@ -1,0 +1,60 @@
+name: fair_recent_smoke
+results_root: artifacts/results/fair_matrix
+external_root: external
+seeds: [11]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: signet
+    overrides:
+      - training.epochs=1
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.max_graphs_per_split=128
+  - config: ../tracelog.yaml
+    model: cvtgad
+    overrides:
+      - training.epochs=1
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.max_graphs_per_split=128
+  - config: ../tracelog.yaml
+    model: muse
+    overrides:
+      - recent_baseline.muse_representation_epochs=1
+      - recent_baseline.muse_classifier_epochs=1
+      - recent_baseline.max_graphs_per_split=32
+  - config: ../tracelog.yaml
+    model: gladmamba
+    overrides:
+      - training.epochs=1
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.max_graphs_per_split=128
+  - config: ../flowgraph.yaml
+    model: signet
+    overrides:
+      - training.epochs=1
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.max_graphs_per_split=64
+  - config: ../flowgraph.yaml
+    model: cvtgad
+    overrides:
+      - training.epochs=1
+      - training.batch_size=2
+      - evaluation.batch_size=2
+      - recent_baseline.max_graphs_per_split=32
+  - config: ../flowgraph.yaml
+    model: muse
+    overrides:
+      - recent_baseline.muse_representation_epochs=1
+      - recent_baseline.muse_classifier_epochs=1
+      - recent_baseline.max_graphs_per_split=32
+  - config: ../flowgraph.yaml
+    model: gladmamba
+    overrides:
+      - training.epochs=1
+      - training.batch_size=2
+      - evaluation.batch_size=2
+      - recent_baseline.max_graphs_per_split=32
