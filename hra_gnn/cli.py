@@ -8,6 +8,7 @@ from .config import apply_overrides, load_config, validate_config
 from .data import CSVGraphDataset, load_dataset
 from .diagnostics import run_diagnostics
 from .experiments import run_experiment_suite
+from .interop import export_tu_dataset
 from .plotting import (
     plot_ablation,
     plot_main_comparison,
@@ -62,6 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--output", required=True)
     prepare.add_argument("--seed", type=int, default=42)
     prepare.add_argument("--max-graphs", type=int)
+
+    export = subparsers.add_parser("export-tu")
+    export.add_argument("--config", required=True)
+    export.add_argument("--output", required=True)
+    export.add_argument("--name", required=True)
+    export.add_argument(
+        "--set", action="append", default=[], help="YAML override: key=value"
+    )
 
     plot = subparsers.add_parser("plot")
     plot.add_argument(
@@ -151,6 +160,13 @@ def main() -> None:
                 max_graphs=arguments.max_graphs,
             )
         print(f"Wrote prepared dataset to {output.resolve()}")
+    elif arguments.command == "export-tu":
+        output = export_tu_dataset(
+            _config(arguments),
+            arguments.output,
+            arguments.name,
+        )
+        print(f"Wrote TU Dataset to {output.resolve()}")
     elif arguments.command == "plot":
         functions = {
             "comparison": plot_main_comparison,

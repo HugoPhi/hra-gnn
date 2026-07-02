@@ -125,6 +125,18 @@ ADFA-LD 使用官方三个轨迹目录构图：
 
 两者输出为可内存映射的 packed 图数据，不要求把全部图对象一次性载入内存。
 
+为官方近期模型导出标准 TU Dataset，并保留冻结划分映射：
+
+```bash
+.venv/bin/python run.py export-tu \
+  --config configs/hdfs.yaml \
+  --output data/tu_fair \
+  --name HDFS_Fair
+```
+
+`split_mapping.csv` 记录本项目 `graph_id`、TU 图序号、标签和
+train/validation/test 归属，官方模型公平适配必须使用该文件。
+
 当前实现使用 HRGCN 发布的图 ID 划分文件。TraceLog 有独立的训练、验证和测试
 划分；FlowGraph 只有训练划分和一个评估划分。
 
