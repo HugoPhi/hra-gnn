@@ -13,13 +13,14 @@
 - [复现状态与实测结果](doc/复现状态.md)
 - [代码与论文实现详解](doc/代码与论文实现详解.md)
 - [MathType 评分公式恢复证据](doc/评分公式恢复证据.md)
-- [数据集说明与派生图构建过程](doc/数据集说明与派生图构建过程.md)
-- [数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)
-- [近期 Baseline 服务器验收记录](doc/近期Baseline服务器验收记录.md)
-- [主表第一次实验](doc/主表第一次实验.md)
-- [HRA-GNN 大规模种子搜索与最终 AUROC/AP 表分析](doc/HRA-GNN大规模种子搜索与最终AUROC_AP表分析.md)
-- [ADFA-LD AP 改进与固定协议复评](doc/ADFA-LD_AP改进与固定协议复评.md)
-- [FlowGraph ECDF-Max 与 ADFA-LD 序列增强评分详解](doc/FlowGraph_ECDF-Max与ADFA-LD序列增强评分详解.md)
+- [主表实验文档索引](doc/主表/README.md)
+- [数据集说明与派生图构建过程](doc/主表/数据集说明与派生图构建过程.md)
+- [数据集与模型评测工作拆分](doc/主表/数据集与模型评测工作拆分.md)
+- [近期 Baseline 服务器验收记录](doc/主表/近期Baseline服务器验收记录.md)
+- [主表第一次实验](doc/主表/主表第一次实验.md)
+- [HRA-GNN 大规模种子搜索与最终 AUROC/AP 表分析](doc/主表/HRA-GNN大规模种子搜索与最终AUROC_AP表分析.md)
+- [ADFA-LD AP 改进与固定协议复评](doc/主表/ADFA-LD_AP改进与固定协议复评.md)
+- [FlowGraph ECDF-Max 与 ADFA-LD 序列增强评分详解](doc/主表/FlowGraph_ECDF-Max与ADFA-LD序列增强评分详解.md)
 
 其中《代码与论文实现详解》是严格审查模型实现时的主文档，包含公式到代码的
 逐项对应、张量形状、训练流程、工程优化、已知缺陷和建议审查顺序。
@@ -312,7 +313,7 @@ SIGNET、CVTGAD、MUSE、GLADMamba 的官方仓库和 commit 已锁定在
 ```
 
 官方协议结果只负责验证实现；公平主表将使用本项目冻结的数据划分、共同输入和
-无标签 checkpoint 选择。详情见[数据集与模型评测工作拆分](doc/数据集与模型评测工作拆分.md)。
+无标签 checkpoint 选择。详情见[数据集与模型评测工作拆分](doc/主表/数据集与模型评测工作拆分.md)。
 
 CVTGAD/GLADMamba 公平入口：
 

@@ -1,5 +1,7 @@
 # ADFA-LD AP 改进与固定协议复评
 
+> 本文归档于 `doc/主表/`，记录 ADFA-LD 公平协议修正和序列增强评分实验。
+
 ## 1. 先纠正原比较中的协议问题
 
 原主表不能用来判断 HRA-GNN 与 GLADMamba 在 ADFA-LD 上的 AP 高低：
