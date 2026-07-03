@@ -19,6 +19,7 @@
 - [主表第一次实验](doc/主表第一次实验.md)
 - [HRA-GNN 大规模种子搜索与最终 AUROC/AP 表分析](doc/HRA-GNN大规模种子搜索与最终AUROC_AP表分析.md)
 - [ADFA-LD AP 改进与固定协议复评](doc/ADFA-LD_AP改进与固定协议复评.md)
+- [FlowGraph ECDF-Max 与 ADFA-LD 序列增强评分详解](doc/FlowGraph_ECDF-Max与ADFA-LD序列增强评分详解.md)
 
 其中《代码与论文实现详解》是严格审查模型实现时的主文档，包含公式到代码的
 逐项对应、张量形状、训练流程、工程优化、已知缺陷和建议审查顺序。
