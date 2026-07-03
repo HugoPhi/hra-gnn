@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .adfa_scoring import rescore_adfa_hybrid
 from .config import apply_overrides, load_config, validate_config
 from .data import CSVGraphDataset, load_dataset
 from .diagnostics import run_diagnostics
@@ -127,6 +128,17 @@ def build_parser() -> argparse.ArgumentParser:
     rescore = subparsers.add_parser("calibrated-rescore")
     rescore.add_argument("--config", required=True)
     rescore.add_argument("--checkpoint", required=True)
+
+    adfa_rescore = subparsers.add_parser("adfa-hybrid-rescore")
+    adfa_rescore.add_argument("--config", required=True)
+    adfa_rescore.add_argument("--checkpoint", required=True)
+    adfa_rescore.add_argument("--fixed-test-ids")
+    adfa_rescore.add_argument("--unigram-weight", type=float, default=0.5)
+    adfa_rescore.add_argument("--markov-weight", type=float, default=0.25)
+    adfa_rescore.add_argument("--markov-order", type=int, default=3)
+    adfa_rescore.add_argument(
+        "--set", action="append", default=[], help="YAML override: key=value"
+    )
 
     plot = subparsers.add_parser("plot")
     plot.add_argument(
@@ -257,6 +269,16 @@ def main() -> None:
         summary = rescore_calibrated_max(
             load_config(arguments.config),
             arguments.checkpoint,
+        )
+        print(json.dumps(summary, indent=2))
+    elif arguments.command == "adfa-hybrid-rescore":
+        summary = rescore_adfa_hybrid(
+            _config(arguments),
+            arguments.checkpoint,
+            fixed_test_ids=arguments.fixed_test_ids,
+            unigram_weight=arguments.unigram_weight,
+            markov_weight=arguments.markov_weight,
+            markov_order=arguments.markov_order,
         )
         print(json.dumps(summary, indent=2))
     elif arguments.command == "plot":

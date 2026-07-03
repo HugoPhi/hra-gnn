@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from hra_gnn.data import SyntheticGraphDataset
-from hra_gnn.graph import batch_graphs
+from hra_gnn.graph import GraphSample, batch_graphs
 from hra_gnn.model import HRAGNN
 
 
@@ -29,6 +29,8 @@ def test_model_variants_forward_and_backward(fusion: str, readout: str) -> None:
     loss.backward()
     assert output.embedding.shape == (8,)
     assert output.node_embeddings.shape == (graph.num_nodes, 8)
+    assert output.auxiliary is not None
+    assert torch.isfinite(output.auxiliary["relation_deviation"])
     assert torch.isfinite(loss)
 
 
@@ -121,3 +123,52 @@ def test_edge_only_schema_avoids_quadratic_relation_expansion() -> None:
     assert model.num_relations == 3
     assert model.layers[0].relation_weight.shape == (3, 8, 8)
     assert output.embedding.shape == (8,)
+
+
+@pytest.mark.parametrize("pool", ["topk", "max", "mean"])
+def test_relation_deviation_is_a_finite_graph_score(pool: str) -> None:
+    dataset = SyntheticGraphDataset(num_graphs=8)
+    graph = batch_graphs([dataset[0], dataset[1]])
+    model = HRAGNN(
+        input_dim=7,
+        hidden_dim=8,
+        output_dim=8,
+        num_node_types=3,
+        num_edge_types=2,
+        score_mode="relation_deviation",
+        deviation_score_pool=pool,
+    )
+    model.train()
+    model(graph, update_prototypes=True)
+    model.eval()
+
+    output = model(graph)
+    score = model.anomaly_score(output)
+
+    assert score.shape == (2,)
+    assert torch.isfinite(score).all()
+
+
+def test_single_node_relation_diagnostics_keep_node_axis() -> None:
+    graph = GraphSample(
+        x=torch.ones((1, 3)),
+        node_type=torch.zeros(1, dtype=torch.long),
+        edge_index=torch.empty((2, 0), dtype=torch.long),
+        edge_type=torch.empty(0, dtype=torch.long),
+        label=0,
+        graph_id=0,
+    )
+    model = HRAGNN(
+        input_dim=3,
+        hidden_dim=4,
+        output_dim=4,
+        num_node_types=1,
+        num_edge_types=1,
+        num_layers=1,
+    )
+
+    output = model(graph)
+
+    assert output.auxiliary is not None
+    assert output.auxiliary["node_relation_deviation"].shape == (1,)
+    assert "relation_deviation" not in output.auxiliary

@@ -1,0 +1,49 @@
+name: adfa_ap_diagnostic
+base_config: ../adfa_ld.yaml
+seeds: [9]
+
+common:
+  experiment:
+    stage: ap_architecture_diagnostic
+  training:
+    epochs: 10
+    batch_size: 4
+    early_stopping_patience: 3
+  evaluation:
+    score_mode: svdd
+    batch_size: 4
+    sampling: seeded_stratified
+
+variants:
+  max_readout:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: max
+  mean_readout:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: mean
+  hybrid_no_ssl:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
+    ssl:
+      enabled: false
+  max_no_ssl:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: max
+    ssl:
+      enabled: false
+  hybrid_weak_ssl:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
+    ssl:
+      enabled: true
+      loss_weight: 0.01

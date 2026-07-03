@@ -1,0 +1,17 @@
+{
+  "prevalence": 0.5,
+  "auc": 0.8584479999999999,
+  "ap": 0.8475272379868943,
+  "full_auc": 0.8568949002793796,
+  "full_ap": 0.6594796138605515,
+  "dataset": "ADFA-LD",
+  "seed": 9,
+  "score_mode": "normal_ecdf_svdd_unigram_markov",
+  "unigram_weight": 0.5,
+  "markov_weight": 0.25,
+  "markov_order": 3,
+  "calibration_source": "normal_train_only",
+  "fixed_test_ids": "configs/splits/adfa_ld_fixed_test_1000.txt",
+  "num_fixed_test_graphs": 1000,
+  "experimental_stage": "candidate_extension"
+}

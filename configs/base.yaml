@@ -21,6 +21,8 @@ model:
   prototype_momentum: 0.9
   prototype_min_scale: 0.001
   readout: hybrid
+  deviation_score_pool: topk
+  deviation_score_topk_fraction: 0.05
   dropout: 0.1
 
 augmentation:

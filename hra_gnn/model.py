@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 import torch
 from torch import nn
@@ -200,12 +201,13 @@ class RelationDeviationLayer(nn.Module):
         *,
         update_prototypes: bool,
         collect_diagnostics: bool,
-    ) -> tuple[torch.Tensor, dict[int, dict[str, float]]]:
+    ) -> tuple[torch.Tensor, dict[int, dict[str, float]], torch.Tensor]:
         num_nodes = h.shape[0]
         source, destination = graph.edge_index
         base = self.root(h)
 
         diagnostics: dict[int, dict[str, float]] = {}
+        node_deviation = torch.zeros(num_nodes, dtype=h.dtype, device=h.device)
         if relation_ids.numel() == 0:
             fused = base
         else:
@@ -241,6 +243,13 @@ class RelationDeviationLayer(nn.Module):
             deviations = (standardized.square().mean(dim=1) + 1e-8).sqrt()
             deviations = torch.where(
                 initialized, deviations, torch.zeros_like(deviations)
+            )
+            node_deviation.scatter_reduce_(
+                0,
+                active_nodes,
+                deviations,
+                reduce="amax",
+                include_self=True,
             )
 
             if self.training and update_prototypes:
@@ -289,7 +298,11 @@ class RelationDeviationLayer(nn.Module):
                         ),
                     }
 
-        return self.norm(h + self.dropout(self.activation(fused))), diagnostics
+        return (
+            self.norm(h + self.dropout(self.activation(fused))),
+            diagnostics,
+            node_deviation,
+        )
 
 
 class HRAGNN(nn.Module):
@@ -312,6 +325,8 @@ class HRAGNN(nn.Module):
         dropout: float = 0.1,
         score_ssl_weight: float = 1.0,
         score_mode: str = "paper_product",
+        deviation_score_pool: str = "topk",
+        deviation_score_topk_fraction: float = 0.05,
     ) -> None:
         super().__init__()
         self.input_dim = input_dim
@@ -329,6 +344,8 @@ class HRAGNN(nn.Module):
         self.readout = readout
         self.score_ssl_weight = score_ssl_weight
         self.score_mode = score_mode
+        self.deviation_score_pool = deviation_score_pool
+        self.deviation_score_topk_fraction = deviation_score_topk_fraction
 
         self.type_projection = nn.ModuleList(
             [nn.Linear(input_dim, hidden_dim) for _ in range(num_node_types)]
@@ -396,7 +413,7 @@ class HRAGNN(nn.Module):
         *,
         update_prototypes: bool = False,
         collect_diagnostics: bool = False,
-    ) -> tuple[torch.Tensor, dict[int, dict[str, float]]]:
+    ) -> tuple[torch.Tensor, dict[int, dict[str, float]], torch.Tensor]:
         h = torch.zeros(
             graph.num_nodes,
             self.hidden_dim,
@@ -415,8 +432,9 @@ class HRAGNN(nn.Module):
             self.relation_schema,
         )
         diagnostics: dict[int, dict[str, float]] = {}
+        node_deviation = torch.zeros(graph.num_nodes, dtype=h.dtype, device=h.device)
         for layer_index, layer in enumerate(self.layers):
-            h, layer_diagnostics = layer(
+            h, layer_diagnostics, layer_node_deviation = layer(
                 h,
                 graph,
                 relation_ids,
@@ -425,7 +443,31 @@ class HRAGNN(nn.Module):
             )
             if collect_diagnostics and layer_index == len(self.layers) - 1:
                 diagnostics = layer_diagnostics
-        return h, diagnostics
+            if layer_index == len(self.layers) - 1:
+                node_deviation = layer_node_deviation
+        return h, diagnostics, node_deviation
+
+    def _pool_relation_deviation(
+        self,
+        node_deviation: torch.Tensor,
+        batch: torch.Tensor,
+        num_graphs: int,
+    ) -> torch.Tensor:
+        if self.deviation_score_pool == "max":
+            return segment_max(node_deviation.unsqueeze(1), batch, num_graphs).squeeze(
+                1
+            )
+        if self.deviation_score_pool == "mean":
+            return segment_mean(node_deviation.unsqueeze(1), batch, num_graphs).squeeze(
+                1
+            )
+        values = []
+        fraction = max(min(float(self.deviation_score_topk_fraction), 1.0), 0.0)
+        for graph_id in range(num_graphs):
+            graph_values = node_deviation[batch == graph_id]
+            count = max(1, int(math.ceil(fraction * graph_values.numel())))
+            values.append(torch.topk(graph_values, count).values.mean())
+        return torch.stack(values)
 
     def forward(
         self,
@@ -434,7 +476,7 @@ class HRAGNN(nn.Module):
         update_prototypes: bool = False,
         collect_diagnostics: bool = False,
     ) -> ModelOutput:
-        node_embeddings, diagnostics = self.encode_nodes(
+        node_embeddings, diagnostics, node_deviation = self.encode_nodes(
             graph,
             update_prototypes=update_prototypes,
             collect_diagnostics=collect_diagnostics,
@@ -445,6 +487,11 @@ class HRAGNN(nn.Module):
             )
         else:
             batch = graph.batch
+        relation_deviation = None
+        if self.score_mode == "relation_deviation" or collect_diagnostics:
+            relation_deviation = self._pool_relation_deviation(
+                node_deviation, batch, graph.num_graphs
+            )
         maximum = segment_max(node_embeddings, batch, graph.num_graphs)
         mean = segment_mean(node_embeddings, batch, graph.num_graphs)
 
@@ -462,6 +509,8 @@ class HRAGNN(nn.Module):
         if graph.batch is None:
             embedding = embedding.squeeze(0)
             gate = gate.squeeze(0)
+            if relation_deviation is not None:
+                relation_deviation = relation_deviation.squeeze(0)
         ssl_logit = self.ssl_head(embedding).squeeze(-1)
         return ModelOutput(
             embedding=embedding,
@@ -469,9 +518,20 @@ class HRAGNN(nn.Module):
             node_embeddings=node_embeddings,
             gate=gate,
             relation_diagnostics=diagnostics,
+            auxiliary={
+                "node_relation_deviation": node_deviation,
+                **(
+                    {"relation_deviation": relation_deviation}
+                    if relation_deviation is not None
+                    else {}
+                ),
+            },
         )
 
     def anomaly_score(self, output: ModelOutput) -> torch.Tensor:
+        if self.score_mode == "relation_deviation":
+            assert output.auxiliary is not None
+            return output.auxiliary["relation_deviation"]
         if not bool(self.svdd_center_initialized):
             raise RuntimeError("SVDD center has not been initialized")
         svdd = (output.embedding - self.svdd_center).square().mean(dim=-1)

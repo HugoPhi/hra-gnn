@@ -64,6 +64,8 @@ def build_model(config: dict[str, Any]) -> nn.Module:
         dropout=model.get("dropout", 0.1),
         score_ssl_weight=config["evaluation"].get("score_ssl_weight", 1.0),
         score_mode=config["evaluation"].get("score_mode", "paper_product"),
+        deviation_score_pool=model.get("deviation_score_pool", "topk"),
+        deviation_score_topk_fraction=model.get("deviation_score_topk_fraction", 0.05),
     )
 
 
@@ -407,6 +409,15 @@ class Trainer:
             ssl_cpu = ssl_anomaly_values.detach().cpu().tolist()
             probability_cpu = ssl_logits.sigmoid().detach().cpu().tolist()
             gate_cpu = gate_values.detach().mean(dim=1).cpu().tolist()
+            relation_deviation_values = torch.full_like(score_values, math.nan)
+            if (
+                output.auxiliary is not None
+                and "relation_deviation" in output.auxiliary
+            ):
+                relation_deviation_values = output.auxiliary[
+                    "relation_deviation"
+                ].reshape(-1)
+            relation_deviation_cpu = relation_deviation_values.detach().cpu().tolist()
             for item, graph_item in enumerate(graphs):
                 labels.append(graph_item.label)
                 scores.append(float(score_cpu[item]))
@@ -419,6 +430,7 @@ class Trainer:
                         "ssl_anomaly_score": float(ssl_cpu[item]),
                         "ssl_probability": float(probability_cpu[item]),
                         "gate_mean": float(gate_cpu[item]),
+                        "relation_deviation_score": float(relation_deviation_cpu[item]),
                     }
                 )
             if collect_diagnostics:
@@ -478,6 +490,9 @@ class Trainer:
             metrics["_labels"] = labels
             metrics["_svdd_scores"] = [row["svdd_score"] for row in rows]
             metrics["_ssl_scores"] = [row["ssl_anomaly_score"] for row in rows]
+            metrics["_relation_deviation_scores"] = [
+                row["relation_deviation_score"] for row in rows
+            ]
             metrics["_graph_ids"] = [row["graph_id"] for row in rows]
         return metrics
 

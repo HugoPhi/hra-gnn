@@ -75,6 +75,9 @@ def validate_config(config: dict[str, Any]) -> None:
     readout = config["model"].get("readout", "hybrid")
     if readout not in {"hybrid", "max", "mean"}:
         raise ValueError(f"Unsupported readout: {readout}")
+    deviation_score_pool = config["model"].get("deviation_score_pool", "topk")
+    if deviation_score_pool not in {"topk", "max", "mean"}:
+        raise ValueError(f"Unsupported deviation_score_pool: {deviation_score_pool}")
     architecture = config["model"].get("architecture", "hra")
     if architecture not in {
         "hra",
@@ -92,5 +95,6 @@ def validate_config(config: dict[str, Any]) -> None:
         "weighted_sum",
         "product",
         "paper_product",
+        "relation_deviation",
     }:
         raise ValueError(f"Unsupported score_mode: {score_mode}")
