@@ -16,6 +16,7 @@ from .plotting import (
     plot_relation_diagnostics,
     plot_data_diagnostics,
     plot_sensitivity,
+    plot_tuning_marginals,
     plot_training_history,
 )
 from .preprocessing import prepare_adfa_ld, prepare_hdfs
@@ -34,6 +35,7 @@ from .reporting import (
 )
 from .rescoring import rescore_calibrated_max
 from .trainer import Trainer, evaluate_checkpoint
+from .tuning import merge_hyperparameter_search, run_hyperparameter_search
 
 
 def _config(arguments: argparse.Namespace) -> dict:
@@ -63,6 +65,15 @@ def build_parser() -> argparse.ArgumentParser:
     experiment.add_argument(
         "--force", action="store_true", help="rerun completed suite jobs"
     )
+
+    tune = subparsers.add_parser("tune")
+    tune.add_argument("--search", required=True)
+    tune.add_argument("--shard-index", type=int, default=0)
+    tune.add_argument("--num-shards", type=int, default=1)
+    tune.add_argument("--force", action="store_true")
+
+    tune_merge = subparsers.add_parser("tune-merge")
+    tune_merge.add_argument("--search", required=True)
 
     table = subparsers.add_parser("table")
     table.add_argument("--input", action="append", required=True)
@@ -151,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
             "training",
             "relations",
             "diagnostics",
+            "tuning",
         ),
     )
     plot.add_argument("--input", required=True)
@@ -197,6 +209,20 @@ def main() -> None:
     elif arguments.command == "experiment":
         root, rows = run_experiment_suite(arguments.suite, resume=not arguments.force)
         print(f"Wrote {len(rows)} runs to {root}")
+    elif arguments.command == "tune":
+        root, rows = run_hyperparameter_search(
+            arguments.search,
+            resume=not arguments.force,
+            shard_index=arguments.shard_index,
+            num_shards=arguments.num_shards,
+        )
+        print(f"Wrote {len(rows)} tuning runs to {root.resolve()}")
+    elif arguments.command == "tune-merge":
+        root, rows, ranking = merge_hyperparameter_search(arguments.search)
+        print(
+            f"Merged {len(rows)} runs and ranked {len(ranking)} trials "
+            f"under {root.resolve()}"
+        )
     elif arguments.command == "table":
         summary = summarize_runs(
             arguments.input,
@@ -289,6 +315,7 @@ def main() -> None:
             "training": plot_training_history,
             "relations": plot_relation_diagnostics,
             "diagnostics": plot_data_diagnostics,
+            "tuning": plot_tuning_marginals,
         }
         functions[arguments.kind](arguments.input, arguments.output)
         print(f"Wrote {Path(arguments.output).resolve()}")

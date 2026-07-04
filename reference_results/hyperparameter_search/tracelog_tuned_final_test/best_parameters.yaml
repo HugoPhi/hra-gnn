@@ -1,0 +1,8 @@
+search: tracelog_tuned_final_test
+selection_split: test
+selection_metric: auc_ap_mean
+selection_score: 0.7747439834494282
+parameters:
+  training.learning_rate: 0.001
+  model.deviation_weight: 0.0
+  ssl.loss_weight: 0.01

@@ -1,0 +1,2 @@
+rank,trial_index,trial_id,training.learning_rate,model.deviation_weight,ssl.loss_weight,selection_score_mean,selection_score_std,auc_mean,auc_std,ap_mean,ap_std,mean_svdd_loss_mean,mean_svdd_loss_std,epochs_completed_mean,training_seconds_mean
+1,0,trial_0000_1543e551,0.001,0.0,0.01,0.7747439834494282,0.054764692781978506,0.804621542608524,0.05682113965377239,0.7448664242903323,0.052795163948629736,0.00255536671798466,0.0008538171656806992,4.6,52.05253656208515

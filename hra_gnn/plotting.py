@@ -166,6 +166,46 @@ def plot_sensitivity(input_csv: str | Path, output: str | Path) -> None:
     plt.close(grid.figure)
 
 
+def plot_tuning_marginals(input_csv: str | Path, output: str | Path) -> None:
+    data = pd.read_csv(input_csv)
+    parameters = [column for column in data if "." in column]
+    if not parameters or not {"auc", "ap"}.issubset(data.columns):
+        raise ValueError(
+            "Tuning CSV must contain dotted parameter columns plus auc and ap"
+        )
+    sns.set_theme(style="whitegrid", font_scale=1.0)
+    figure, axes = plt.subplots(
+        1,
+        len(parameters),
+        figsize=(5.2 * len(parameters), 4.4),
+        squeeze=False,
+    )
+    for axis, parameter in zip(axes.flat, parameters):
+        grouped = data.groupby(parameter, as_index=False)[["auc", "ap"]].mean()
+        long = grouped.melt(
+            id_vars=[parameter],
+            value_vars=["auc", "ap"],
+            var_name="metric",
+            value_name="score",
+        )
+        sns.lineplot(
+            data=long,
+            x=parameter,
+            y="score",
+            hue="metric",
+            marker="o",
+            palette=PALETTE[:2],
+            ax=axis,
+        )
+        axis.set_xlabel(parameter)
+        axis.set_ylabel("Validation score")
+        axis.set_ylim(0, 1.0)
+        axis.legend(title="")
+    figure.tight_layout()
+    figure.savefig(_prepare_output(output), dpi=220, bbox_inches="tight")
+    plt.close(figure)
+
+
 def plot_training_history(input_csv: str | Path, output: str | Path) -> None:
     data = pd.read_csv(input_csv)
     columns = [

@@ -98,12 +98,17 @@ def result_directory(config: dict[str, Any], seed: int) -> Path:
 
 
 class Trainer:
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: dict[str, Any],
+        *,
+        dataset: Any | None = None,
+    ) -> None:
         self.config = config
         self.seed = int(config["training"].get("seed", 42))
         seed_everything(self.seed)
         self.device = resolve_device(config["training"].get("device", "auto"))
-        self.dataset = load_dataset(config["dataset"])
+        self.dataset = dataset if dataset is not None else load_dataset(config["dataset"])
         dataset_metadata = getattr(self.dataset, "metadata", {})
         for key in ("feature_dim", "num_node_types", "num_edge_types"):
             if key in dataset_metadata:
@@ -516,6 +521,9 @@ class Trainer:
         maximum_epochs = int(self.config["training"].get("epochs", 100))
         evaluate_every = int(self.config["training"].get("evaluate_every", 1))
         patience = int(self.config["training"].get("early_stopping_patience", 10))
+        checkpoint_metric = self.config["training"].get(
+            "checkpoint_metric", "negative_mean_svdd_loss"
+        )
         best_metric = -math.inf
         stale_epochs = 0
         history: list[dict[str, float]] = []
@@ -548,7 +556,18 @@ class Trainer:
                 row["validation_auc"] = validation["auc"]
                 row["validation_ap"] = validation["ap"]
                 row["validation_svdd_loss"] = validation["mean_svdd_loss"]
-                monitored = -validation["mean_svdd_loss"]
+                if checkpoint_metric == "auc_ap_mean":
+                    monitored = (validation["auc"] + validation["ap"]) / 2.0
+                elif checkpoint_metric == "auc":
+                    monitored = validation["auc"]
+                elif checkpoint_metric == "ap":
+                    monitored = validation["ap"]
+                elif checkpoint_metric == "negative_mean_svdd_loss":
+                    monitored = -validation["mean_svdd_loss"]
+                else:
+                    raise ValueError(
+                        f"Unsupported checkpoint metric: {checkpoint_metric}"
+                    )
                 if math.isnan(monitored):
                     monitored = -row["loss"]
                 if monitored > best_metric:
@@ -627,8 +646,13 @@ class Trainer:
         collect_diagnostics = bool(
             self.config["evaluation"].get("collect_diagnostics", False)
         )
+        evaluation_split = self.config.get("experiment", {}).get(
+            "final_evaluation_split", "test"
+        )
+        if evaluation_split not in self.splits:
+            raise ValueError(f"Unknown final evaluation split: {evaluation_split}")
         test_metrics = self.evaluate(
-            "test",
+            evaluation_split,
             collect_diagnostics=collect_diagnostics,
             write_predictions=True,
             threshold=threshold,
@@ -649,7 +673,8 @@ class Trainer:
             "parameters": parameter_count(self.model),
             "device": str(self.device),
             "threshold_source": "normal_train_scores",
-            "checkpoint_selection": "unlabeled_validation_svdd_loss",
+            "checkpoint_selection": checkpoint_metric,
+            "evaluation_split": evaluation_split,
             "max_train_graphs_per_epoch": self.config["training"].get(
                 "max_train_graphs"
             ),

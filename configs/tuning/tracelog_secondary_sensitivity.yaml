@@ -1,0 +1,67 @@
+name: tracelog_secondary_sensitivity
+base_config: ../tracelog.yaml
+results_root: artifacts/results/hyperparameter_search
+seeds: [11]
+retain_checkpoints: false
+
+common:
+  experiment:
+    stage: hyperparameter_secondary_sensitivity
+    final_evaluation_split: validation
+  training:
+    epochs: 8
+    max_train_graphs: 2000
+    batch_size: 16
+    early_stopping_patience: 3
+    checkpoint_metric: auc_ap_mean
+  evaluation:
+    max_graphs: 4000
+    batch_size: 16
+    sampling: seeded_stratified
+
+trials:
+  - &base
+    training.learning_rate: 0.001
+    model.deviation_weight: 0.0
+    ssl.loss_weight: 0.01
+    model.hidden_dim: 128
+    model.output_dim: 128
+    model.num_layers: 2
+    model.dropout: 0.1
+    augmentation.edge_perturbation_rate: 0.13
+    augmentation.edge_addition_rate: 0.13
+    augmentation.node_type_swap_rate: 0.10
+    augmentation.edge_type_swap_rate: 0.18
+  - <<: *base
+    model.dropout: 0.0
+  - <<: *base
+    model.dropout: 0.3
+  - <<: *base
+    model.hidden_dim: 64
+    model.output_dim: 64
+  - <<: *base
+    model.hidden_dim: 256
+    model.output_dim: 256
+  - <<: *base
+    model.num_layers: 1
+  - <<: *base
+    model.num_layers: 3
+  - <<: *base
+    augmentation.edge_perturbation_rate: 0.0
+    augmentation.edge_addition_rate: 0.0
+    augmentation.node_type_swap_rate: 0.0
+    augmentation.edge_type_swap_rate: 0.0
+  - <<: *base
+    augmentation.edge_perturbation_rate: 0.065
+    augmentation.edge_addition_rate: 0.065
+    augmentation.node_type_swap_rate: 0.05
+    augmentation.edge_type_swap_rate: 0.09
+  - <<: *base
+    augmentation.edge_perturbation_rate: 0.195
+    augmentation.edge_addition_rate: 0.195
+    augmentation.node_type_swap_rate: 0.15
+    augmentation.edge_type_swap_rate: 0.27
+
+selection:
+  split: validation
+  metric: auc_ap_mean

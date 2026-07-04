@@ -1,0 +1,10 @@
+search: tracelog_best_structure
+selection_split: validation
+selection_metric: auc_ap_mean
+selection_score: 0.8158860625646774
+parameters:
+  training.learning_rate: 0.003
+  model.deviation_weight: 1.0
+  ssl.loss_weight: 0.001
+  model.attention_temperature: 2.0
+  model.prototype_momentum: 0.7

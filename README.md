@@ -200,6 +200,31 @@ train/validation/test 归属，官方模型公平适配必须使用该文件。
   --set output.run_name=flow_lambda_05
 ```
 
+### 超参数搜索
+
+TraceLog 核心参数联合网格搜索：
+
+```bash
+bash scripts/run_tracelog_tuning.sh
+```
+
+该入口搜索学习率、关系偏差调制系数和 SSL 损失权重，使用独立验证集排序，
+不会在搜索阶段读取测试指标来选择参数。搜索协议、空间和选参依据见
+`doc/主表/HRA-GNN超参数搜索与选择依据.md`。
+
+当前验证最优配置保存在 `configs/tracelog_tuned.yaml`。该配置的
+`model.deviation_weight=0`，会关闭关系偏差调制；同时其五种子测试均值低于旧
+默认配置。因此它是调参审计结果，不应直接替换论文中的完整 HRA-GNN 主结果。
+
+搜索结束后可绘制三个核心参数的验证集边际趋势：
+
+```bash
+.venv/bin/python run.py plot \
+  --kind tuning \
+  --input artifacts/results/hyperparameter_search/tracelog_core_grid/runs.csv \
+  --output artifacts/figures/hyperparameter_search/tracelog_core_marginals.svg
+```
+
 ### 评估 checkpoint
 
 ```bash
@@ -295,6 +320,15 @@ checkpoint 由无标签验证 SVDD 损失选择，AUC/AP 仅用于监控。
 
 生成的表按“数据集、模型、指标”组织，使用 `booktabs`、`graphicx` 和
 `multirow`。
+
+`reference_results/` 中的全部 LaTeX 表修改后可一键编译为 PDF、SVG 和 PNG：
+
+```bash
+bash scripts/build_all_tex.sh
+```
+
+SVG 会自动更新到 `doc/assets/tables/`，并嵌入对应的主表和复杂度文档。旧的
+`bash scripts/build_complexity_tables.sh` 保留为兼容入口，也会构建全部表格。
 
 ## 官方近期 Baseline
 

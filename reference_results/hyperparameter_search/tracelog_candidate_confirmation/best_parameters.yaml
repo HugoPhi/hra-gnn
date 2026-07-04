@@ -1,0 +1,10 @@
+search: tracelog_candidate_confirmation
+selection_split: validation
+selection_metric: auc_ap_mean
+selection_score: 0.7883569977342981
+parameters:
+  training.learning_rate: 0.001
+  model.deviation_weight: 0.0
+  ssl.loss_weight: 0.01
+  model.attention_temperature: 1.0
+  model.prototype_momentum: 0.9

@@ -1,0 +1,8 @@
+search: tracelog_lr_boundary
+selection_split: validation
+selection_metric: auc_ap_mean
+selection_score: 0.8315401710691432
+parameters:
+  training.learning_rate: 0.003
+  model.deviation_weight: 1.0
+  ssl.loss_weight: 0.001

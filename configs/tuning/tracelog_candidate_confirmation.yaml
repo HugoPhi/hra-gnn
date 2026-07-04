@@ -1,0 +1,41 @@
+name: tracelog_candidate_confirmation
+base_config: ../tracelog.yaml
+results_root: artifacts/results/hyperparameter_search
+seeds: [11, 22, 33, 44, 55]
+retain_checkpoints: false
+
+common:
+  experiment:
+    stage: hyperparameter_five_seed_confirmation
+    final_evaluation_split: validation
+  training:
+    epochs: 8
+    max_train_graphs: 2000
+    batch_size: 16
+    early_stopping_patience: 3
+    checkpoint_metric: auc_ap_mean
+  evaluation:
+    max_graphs: 4000
+    batch_size: 16
+    sampling: seeded_stratified
+
+trials:
+  - training.learning_rate: 0.003
+    model.deviation_weight: 1.0
+    ssl.loss_weight: 0.001
+    model.attention_temperature: 1.0
+    model.prototype_momentum: 0.9
+  - training.learning_rate: 0.003
+    model.deviation_weight: 1.0
+    ssl.loss_weight: 0.001
+    model.attention_temperature: 2.0
+    model.prototype_momentum: 0.7
+  - training.learning_rate: 0.001
+    model.deviation_weight: 0.0
+    ssl.loss_weight: 0.01
+    model.attention_temperature: 1.0
+    model.prototype_momentum: 0.9
+
+selection:
+  split: validation
+  metric: auc_ap_mean

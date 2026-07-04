@@ -1,0 +1,22 @@
+extends: tracelog.yaml
+
+model:
+  hidden_dim: 128
+  output_dim: 128
+  num_layers: 2
+  deviation_weight: 0.0
+  attention_temperature: 1.0
+  prototype_momentum: 0.9
+  dropout: 0.1
+
+augmentation:
+  edge_perturbation_rate: 0.195
+  edge_addition_rate: 0.195
+  node_type_swap_rate: 0.15
+  edge_type_swap_rate: 0.27
+
+ssl:
+  loss_weight: 0.01
+
+training:
+  learning_rate: 0.001

@@ -1,0 +1,31 @@
+name: tracelog_positive_structure
+base_config: ../tracelog.yaml
+results_root: artifacts/results/hyperparameter_search
+seeds: [11]
+retain_checkpoints: false
+
+common:
+  experiment:
+    stage: hyperparameter_positive_deviation_structure
+    final_evaluation_split: validation
+  training:
+    epochs: 8
+    max_train_graphs: 2000
+    batch_size: 16
+    early_stopping_patience: 3
+    checkpoint_metric: auc_ap_mean
+  evaluation:
+    max_graphs: 4000
+    batch_size: 16
+    sampling: seeded_stratified
+
+parameters:
+  training.learning_rate: [0.0003]
+  model.deviation_weight: [2.0]
+  ssl.loss_weight: [0.01]
+  model.attention_temperature: [0.25, 0.5, 1.0, 2.0]
+  model.prototype_momentum: [0.5, 0.7, 0.9, 0.99]
+
+selection:
+  split: validation
+  metric: auc_ap_mean

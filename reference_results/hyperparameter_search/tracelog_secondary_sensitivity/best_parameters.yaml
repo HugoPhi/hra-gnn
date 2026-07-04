@@ -1,0 +1,16 @@
+search: tracelog_secondary_sensitivity
+selection_split: validation
+selection_metric: auc_ap_mean
+selection_score: 0.822051613101469
+parameters:
+  training.learning_rate: 0.001
+  model.deviation_weight: 0.0
+  ssl.loss_weight: 0.01
+  model.hidden_dim: 128
+  model.output_dim: 128
+  model.num_layers: 2
+  model.dropout: 0.1
+  augmentation.edge_perturbation_rate: 0.195
+  augmentation.edge_addition_rate: 0.195
+  augmentation.node_type_swap_rate: 0.15
+  augmentation.edge_type_swap_rate: 0.27

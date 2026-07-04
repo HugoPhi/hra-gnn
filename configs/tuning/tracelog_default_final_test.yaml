@@ -1,0 +1,29 @@
+name: tracelog_default_final_test
+base_config: ../tracelog.yaml
+results_root: artifacts/results/hyperparameter_search
+seeds: [11, 22, 33, 44, 55]
+retain_checkpoints: false
+
+common:
+  experiment:
+    stage: frozen_default_reference_test
+    final_evaluation_split: test
+  training:
+    epochs: 8
+    max_train_graphs: 2000
+    batch_size: 16
+    early_stopping_patience: 3
+    checkpoint_metric: auc_ap_mean
+  evaluation:
+    max_graphs: 4000
+    batch_size: 16
+    sampling: seeded_stratified
+
+parameters:
+  training.learning_rate: [0.0001]
+  model.deviation_weight: [1.0]
+  ssl.loss_weight: [0.001]
+
+selection:
+  split: test
+  metric: auc_ap_mean

@@ -1,0 +1,21 @@
+name: synthetic_tuning_smoke
+base_config: ../synthetic.yaml
+results_root: artifacts/results/hyperparameter_search
+seeds: [3]
+
+common:
+  experiment:
+    stage: tuning_smoke
+    final_evaluation_split: validation
+  training:
+    epochs: 1
+    checkpoint_metric: auc_ap_mean
+
+parameters:
+  training.learning_rate: [0.0003, 0.001]
+  model.deviation_weight: [0.5, 1.0]
+  ssl.loss_weight: [0.01]
+
+selection:
+  split: validation
+  metric: auc_ap_mean
