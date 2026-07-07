@@ -1,0 +1,64 @@
+% 需要 \usepackage{booktabs,tabularx}
+\begin{table*}[t]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\setlength{\tabcolsep}{3.2pt}
+\caption{主要图级异常检测模型的理论复杂度对比}
+\label{tab:model_complexity}
+\begin{tabularx}{\textwidth}{lXXX}
+\toprule
+模型 & 单批次主要时间复杂度 & 主要空间复杂度 & 主要瓶颈 \\
+\midrule
+DeepTraLog
+& $\mathcal{O}(L(MH+NH^2))$
+& $\mathcal{O}(M+NH)$
+& 节点级GRU更新 \\
+HGT
+& $\mathcal{O}(L(N+M)H^2)$
+& $\mathcal{O}(MH+NH+LRH^2)$
+& 关系化注意力和消息变换 \\
+OCHetGCN
+& $\mathcal{O}(L(N+M)H^2)$
+& $\mathcal{O}(MH+PH+NH+LRH^2)$
+& 静态关系投影 \\
+HRGCN
+& 训练约 $2\mathcal{O}(L(N+M)H^2)$
+& 双分支激活及 $\mathcal{O}(LRH^2)$ 参数
+& 关系层和增强分支 \\
+GLocalKD
+& $2\mathcal{O}(L(N+M)H^2)$
+& 教师--学生双网络
+& 两套完整编码器 \\
+HRA-GNN
+& 推理 $\mathcal{O}(L(N+M)H^2)$；训练约2倍
+& $\mathcal{O}(MH+PH+NH+LRH+LRH^2)$
+& 高关系基数和双视图训练 \\
+SIGNET
+& $\mathcal{O}(\mathcal{G}Ld^2(m+n)+\mathcal{G}nd(d_f+d_f^\ast)+\mathcal{G}Bd)$
+& 稀疏双视图表示及批内对比分数
+& GNN/HGNN双编码与InfoNCE \\
+CVTGAD
+& $\mathcal{O}(L(MH+NH^2)+(N+B)D_c^2+(N^2+B^2)D_c)$
+& $\mathcal{O}(N^2+B^2)$
+& 节点级全连接交叉注意力 \\
+MUSE
+& $\mathcal{O}(N^2)$
+& $\mathcal{O}(N^2)$
+& 完整邻接重构 \\
+GLADMamba
+& 核心SSM线性；完整训练含 $\mathcal{O}(N^2D_c+B^2D_c)$
+& 对比矩阵及谱预处理为 $\mathcal{O}(N^2)$
+& 节点对比损失和稠密拉普拉斯 \\
+\bottomrule
+\end{tabularx}
+\par\vspace{2pt}
+\begin{minipage}{\textwidth}
+\scriptsize
+注：$N$、$M$分别为一个mini-batch中的节点和边总数，$B$为图数量，
+$H$为隐藏维度，$L$为层数，$R$为关系类型数，$P\le M$为有效
+“目标节点--关系”二元组数，$D_c=LH$。SIGNET一行保留原论文符号，
+$\mathcal{G}$为图总数，$n,m$为平均节点和边数。GLADMamba的线性结论仅适用于
+Mamba核心；官方实现的节点对比损失和稠密谱预处理仍具有二次开销。
+\end{minipage}
+\end{table*}

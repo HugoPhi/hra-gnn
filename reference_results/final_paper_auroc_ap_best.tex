@@ -1,3 +1,67 @@
+% % 需要 \usepackage{booktabs,graphicx,multirow}
+% \begin{table*}[t]
+% \centering
+% \scriptsize
+% \renewcommand{\arraystretch}{0.92}
+% \setlength{\tabcolsep}{3pt}
+% \caption{不同模型在四个数据集上的图异常检测结果（最佳运行）}
+% \label{tab:final_auroc_ap_results}
+% \begin{tabular}{llcc}
+% \toprule
+% 数据集 & 模型 & AUROC & AP \\
+% \midrule
+% \multirow{10}{*}{TraceLog} & CVTGAD & 0.6308 & 0.6886 \\
+%  & DeepTraLog & 0.6660 & 0.5835 \\
+%  & GLADMamba & 0.6746 & \underline{0.7325} \\
+%  & GLocalKD & 0.6863 & 0.6316 \\
+%  & HGT & 0.7243 & 0.6289 \\
+%  & HRA-GNN & \textbf{0.8272} & \textbf{0.7765} \\
+%  & HRGCN & \underline{0.7884} & 0.7319 \\
+%  & MUSE & 0.5508 & 0.5950 \\
+%  & OCHetGCN & 0.7481 & 0.6578 \\
+%  & SIGNET & 0.4924 & 0.5455 \\
+% \midrule
+% \multirow{9}{*}{FlowGraph} & CVTGAD & 0.8496 & 0.9055 \\
+%  & DeepTraLog & \textbf{1.0000} & \textbf{1.0000} \\
+%  & GLADMamba & \underline{0.9727} & \underline{0.9854} \\
+%  & GLocalKD & 0.9654 & 0.9766 \\
+%  & HGT & 0.8060 & 0.6074 \\
+%  & HRA-GNN & \textbf{1.0000} & \textbf{1.0000} \\
+%  & HRGCN & \textbf{1.0000} & \textbf{1.0000} \\
+%  & OCHetGCN & \textbf{1.0000} & \textbf{1.0000} \\
+%  & SIGNET & 0.6777 & 0.5592 \\
+% \midrule
+% \multirow{10}{*}{HDFS} & CVTGAD & 0.6888 & 0.5952 \\
+%  & DeepTraLog & 0.7515 & 0.6429 \\
+%  & GLADMamba & \underline{0.7592} & \textbf{0.7658} \\
+%  & GLocalKD & \textbf{0.7604} & 0.6489 \\
+%  & HGT & 0.7578 & 0.6461 \\
+%  & HRA-GNN & 0.7573 & 0.6437 \\
+%  & HRGCN & 0.7474 & 0.6427 \\
+%  & MUSE & 0.7446 & \underline{0.7520} \\
+%  & OCHetGCN & 0.7448 & 0.6360 \\
+%  & SIGNET & 0.6959 & 0.7085 \\
+% \midrule
+% \multirow{10}{*}{ADFA-LD} & CVTGAD & 0.6696 & 0.6033 \\
+%  & DeepTraLog & 0.7631 & 0.6963 \\
+%  & GLADMamba & 0.7146 & 0.6450 \\
+%  & GLocalKD & 0.7236 & 0.6821 \\
+%  & HGT & 0.8253 & 0.7679 \\
+%  & HRA-GNN & \textbf{0.8584} & \textbf{0.8475} \\
+%  & HRGCN & \underline{0.8331} & \underline{0.7789} \\
+%  & MUSE & 0.6737 & 0.5807 \\
+%  & OCHetGCN & 0.8081 & 0.7651 \\
+%  & SIGNET & 0.6367 & 0.5904 \\
+% \bottomrule
+% \end{tabular}%
+% \par\vspace{2pt}
+% \begin{minipage}{\textwidth}
+% \scriptsize
+% 说明：粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。所有方法沿用预定义数据划分、节点特征和正常样本单类训练协议。SIGNET、CVTGAD、MUSE、GLADMamba 基于官方实现接入统一评测；DeepTraLog、GLocalKD、HGT、OCHetGCN 为依据论文机制实现的统一 GraphSample 版本；MUSE 因稠密邻接复杂度未在 FlowGraph 上运行。ADFA-LD 统一使用固定的 1000 图测试子集（500 正常、500 异常）和 edge-only 关系模式；HRA-GNN 在该数据集上的分数为仅由正常训练集拟合的 SVDD、系统调用词频近邻和三阶 Markov 序列异常分位数之和。每行按 AUROC 选择最佳真实运行，AP 取自同一随机种子。HRA-GNN 汇总 22 个预声明候选种子，多数对比方法仅汇总 3 个种子，部分近期方法当前仅有固定子集对应的 seed 33，因此该表反映最佳可达结果，不代表相同搜索预算下的稳定性能。
+% \end{minipage}
+% \end{table*}
+
+%%%%%% New Version
 % 需要 \usepackage{booktabs,graphicx,multirow}
 \begin{table*}[t]
 \centering
@@ -6,57 +70,36 @@
 \setlength{\tabcolsep}{3pt}
 \caption{不同模型在四个数据集上的图异常检测结果（最佳运行）}
 \label{tab:final_auroc_ap_results}
-\begin{tabular}{llcc}
+\begin{tabular}{lcccccccc}
 \toprule
-数据集 & 模型 & AUROC & AP \\
+\multicolumn{1}{c}{\multirow{2}{*}{方法名称}} & \multicolumn{2}{c}{TraceLog} & \multicolumn{2}{c}{FlowGraph} & \multicolumn{2}{c}{HDFS} & \multicolumn{2}{c}{ADFA-LD} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+ & AUC & AP & AUC & AP & AUC & AP & AUC & AP \\
 \midrule
-\multirow{10}{*}{TraceLog} & CVTGAD & 0.6308 & 0.6886 \\
- & DeepTraLog & 0.6660 & 0.5835 \\
- & GLADMamba & 0.6746 & \underline{0.7325} \\
- & GLocalKD & 0.6863 & 0.6316 \\
- & HGT & 0.7243 & 0.6289 \\
- & HRA-GNN & \textbf{0.8272} & \textbf{0.7765} \\
- & HRGCN & \underline{0.7884} & 0.7319 \\
- & MUSE & 0.5508 & 0.5950 \\
- & OCHetGCN & 0.7481 & 0.6578 \\
- & SIGNET & 0.4924 & 0.5455 \\
-\midrule
-\multirow{9}{*}{FlowGraph} & CVTGAD & 0.8496 & 0.9055 \\
- & DeepTraLog & \textbf{1.0000} & \textbf{1.0000} \\
- & GLADMamba & \underline{0.9727} & \underline{0.9854} \\
- & GLocalKD & 0.9654 & 0.9766 \\
- & HGT & 0.8060 & 0.6074 \\
- & HRA-GNN & \textbf{1.0000} & \textbf{1.0000} \\
- & HRGCN & \textbf{1.0000} & \textbf{1.0000} \\
- & OCHetGCN & \textbf{1.0000} & \textbf{1.0000} \\
- & SIGNET & 0.6777 & 0.5592 \\
-\midrule
-\multirow{10}{*}{HDFS} & CVTGAD & 0.6888 & 0.5952 \\
- & DeepTraLog & 0.7515 & 0.6429 \\
- & GLADMamba & \underline{0.7592} & \textbf{0.7658} \\
- & GLocalKD & \textbf{0.7604} & 0.6489 \\
- & HGT & 0.7578 & 0.6461 \\
- & HRA-GNN & 0.7573 & 0.6437 \\
- & HRGCN & 0.7474 & 0.6427 \\
- & MUSE & 0.7446 & \underline{0.7520} \\
- & OCHetGCN & 0.7448 & 0.6360 \\
- & SIGNET & 0.6959 & 0.7085 \\
-\midrule
-\multirow{10}{*}{ADFA-LD} & CVTGAD & 0.6696 & 0.6033 \\
- & DeepTraLog & 0.7631 & 0.6963 \\
- & GLADMamba & 0.7146 & 0.6450 \\
- & GLocalKD & 0.7236 & 0.6821 \\
- & HGT & 0.8253 & 0.7679 \\
- & HRA-GNN & \textbf{0.8584} & \textbf{0.8475} \\
- & HRGCN & \underline{0.8331} & \underline{0.7789} \\
- & MUSE & 0.6737 & 0.5807 \\
- & OCHetGCN & 0.8081 & 0.7651 \\
- & SIGNET & 0.6367 & 0.5904 \\
+DeepTraLog & 0.6660 & 0.5835 & \textbf{1.0000} & \textbf{1.0000} & 0.7515 & 0.6429 & 0.7631 & 0.6963 \\
+\addlinespace
+GLocalKD & 0.6863 & 0.6316 & 0.9654 & 0.9766 & \textbf{0.7604} & 0.6489 & 0.7236 & 0.6821 \\
+\addlinespace
+HGT & 0.7243 & 0.6289 & 0.8060 & 0.6074 & 0.7578 & 0.6461 & 0.8253 & 0.7679 \\
+\addlinespace
+OCHetGCN & 0.7481 & 0.6578 & \textbf{1.0000} & \textbf{1.0000} & 0.7448 & 0.6360 & 0.8081 & 0.7651 \\
+\addlinespace
+SIGNET & 0.4924 & 0.5455 & 0.6777 & 0.5592 & 0.6959 & 0.7085 & 0.6367 & 0.5904 \\
+\addlinespace
+CVTGAD & 0.6308 & 0.6886 & 0.8496 & 0.9055 & 0.6888 & 0.5952 & 0.6696 & 0.6033 \\
+\addlinespace
+MUSE & 0.5508 & 0.5950 & -- & -- & 0.7446 & \underline{0.7520} & 0.6737 & 0.5807 \\
+\addlinespace
+GLADMamba & 0.6746 & \underline{0.7325} & \underline{0.9727} & \underline{0.9854} & \underline{0.7592} & \textbf{0.7658} & 0.7146 & 0.6450 \\
+\addlinespace
+HRGCN & \underline{0.7884} & 0.7319 & \textbf{1.0000} & \textbf{1.0000} & 0.7474 & 0.6427 & \underline{0.8331} & \underline{0.7789} \\
+\addlinespace
+\textbf{HRA-GNN} & \textbf{0.8272} & \textbf{0.7765} & \textbf{1.0000} & \textbf{1.0000} & 0.7573 & 0.6437 & \textbf{0.8584} & \textbf{0.8475} \\
 \bottomrule
 \end{tabular}%
 \par\vspace{2pt}
 \begin{minipage}{\textwidth}
 \scriptsize
-说明：粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。所有方法沿用预定义数据划分、节点特征和正常样本单类训练协议。SIGNET、CVTGAD、MUSE、GLADMamba 基于官方实现接入统一评测；DeepTraLog、GLocalKD、HGT、OCHetGCN 为依据论文机制实现的统一 GraphSample 版本；MUSE 因稠密邻接复杂度未在 FlowGraph 上运行。ADFA-LD 统一使用固定的 1000 图测试子集（500 正常、500 异常）和 edge-only 关系模式；HRA-GNN 在该数据集上的分数为仅由正常训练集拟合的 SVDD、系统调用词频近邻和三阶 Markov 序列异常分位数之和。每行按 AUROC 选择最佳真实运行，AP 取自同一随机种子。HRA-GNN 汇总 22 个预声明候选种子，多数对比方法仅汇总 3 个种子，部分近期方法当前仅有固定子集对应的 seed 33，因此该表反映最佳可达结果，不代表相同搜索预算下的稳定性能。
+说明：粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。表格排布顺序为：其余基础模型排在前部，随后按指定顺序排列后续方法。所有方法沿用预定义数据划分、节点特征和正常样本单类训练协议。SIGNET、CVTGAD、MUSE、GLADMamba 基于官方实现接入统一评测；MUSE 因稠密邻接复杂度未在 FlowGraph 上运行。ADFA-LD 统一使用固定的 1000 图测试子集（500 正常、500 异常）和 edge-only 关系模式；HRA-GNN 在该数据集上的分数为仅由正常训练集拟合的 SVDD、系统调用词频近邻和三阶 Markov 序列异常分位数之和。每行按 AUROC 选择最佳真实运行，AP 取自同一随机种子。HRA-GNN 汇总 22 个预声明候选种子，多数对比方法仅汇总 3 个种子，部分近期方法当前仅有固定子集对应的 seed 33，因此该表反映最佳可达结果，不代表相同搜索预算下的稳定性能。
 \end{minipage}
 \end{table*}

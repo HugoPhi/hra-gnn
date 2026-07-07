@@ -140,6 +140,7 @@ data/ProcessedData_TraceLog/*
 artifacts/*
 !artifacts/.gitkeep
 external/
+tmp/
 
 # Spyder project settings
 .spyderproject

@@ -35,6 +35,8 @@ reference_results/hra_seed_sweep_all_runs.csv
 reference_results/hra_seed_sweep_summary.csv
 ```
 
+![最终论文候选 AUROC/AP 主表](../assets/tables/final_paper_auroc_ap_best.svg)
+
 ## 3. HRA-GNN 的 22-seed 分布
 
 | 数据集 | AUROC 均值±标准差 | AUROC 范围 | AP 均值±标准差 | AP 范围 |

@@ -1,0 +1,30 @@
+% 需要 \usepackage{booktabs}
+\begin{table}[t]
+\centering
+\small
+\caption{TraceLog实验配置下各模型的可训练参数量}
+\label{tab:parameters_tracelog}
+\begin{tabular}{lrr}
+\toprule
+模型 & 参数量 & FP32参数存储/MiB \\
+\midrule
+MUSE & 10,731 & 0.041 \\
+SIGNET & 30,433 & 0.116 \\
+GLADMamba & 79,712 & 0.304 \\
+DeepTraLog & 223,106 & 0.851 \\
+CVTGAD & 2,444,122 & 9.324 \\
+HRA-GNN & 8,570,625 & 32.694 \\
+HGT & 16,934,657 & 64.601 \\
+HRGCN & 16,959,233 & 64.694 \\
+OCHetGCN & 16,959,233 & 64.694 \\
+GLocalKD & 33,918,466 & 129.389 \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}
+\begin{minipage}{0.96\linewidth}
+\scriptsize
+注：参数量按主表实际配置统计，参数存储按FP32估算，不含梯度、优化器状态和
+中间激活。不同方法沿用各自实验隐藏维度，因此该表反映实际运行资源，不等价于
+相同隐藏维度下的纯架构比较。
+\end{minipage}
+\end{table}

@@ -1,0 +1,11 @@
+model,parameters,fp32_parameter_mib,implementation
+MUSE,10731,0.041,official_adapter
+SIGNET,30433,0.116,official_adapter
+GLADMamba,79712,0.304,official_adapter
+DeepTraLog,223106,0.851,paper_mechanism_reimplementation
+CVTGAD,2444122,9.324,official_adapter
+HRA-GNN,8570625,32.694,this_work
+HGT,16934657,64.601,paper_mechanism_reimplementation
+HRGCN,16959233,64.694,unified_sparse_implementation
+OCHetGCN,16959233,64.694,unified_sparse_implementation
+GLocalKD,33918466,129.389,teacher_student_reimplementation
