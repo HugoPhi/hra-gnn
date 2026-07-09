@@ -1,0 +1,25 @@
+name: flowgraph_product_final_test
+base_config: ../flowgraph.yaml
+results_root: artifacts/results/scoring_formula_audit
+seeds: [11, 22, 33, 44, 55]
+retain_checkpoints: false
+
+common:
+  experiment:
+    stage: scoring_formula_product_default_test
+    final_evaluation_split: test
+  training:
+    early_stopping_patience: 4
+    checkpoint_metric: auc_ap_mean
+  evaluation:
+    score_mode: product
+    sampling: seeded_stratified
+
+parameters:
+  training.learning_rate: [0.01]
+  model.deviation_weight: [1.0]
+  ssl.loss_weight: [0.21]
+
+selection:
+  split: test
+  metric: auc_ap_mean

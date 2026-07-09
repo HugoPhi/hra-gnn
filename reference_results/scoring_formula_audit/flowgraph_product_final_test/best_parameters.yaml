@@ -1,0 +1,8 @@
+search: flowgraph_product_final_test
+selection_split: test
+selection_metric: auc_ap_mean
+selection_score: 0.6535748006983858
+parameters:
+  training.learning_rate: 0.01
+  model.deviation_weight: 1.0
+  ssl.loss_weight: 0.21
