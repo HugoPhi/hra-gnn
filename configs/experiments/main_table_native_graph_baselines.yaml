@@ -1,0 +1,66 @@
+name: main_table_native_graph_baselines
+evidence_level: final_table_native_graph_baseline
+results_root: artifacts/results/fair_matrix
+seeds: [11, 22, 33]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: himnet
+    overrides: &native_common
+      - training.epochs=30
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.hidden_dim=64
+      - recent_baseline.output_dim=64
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=1000
+      - recent_baseline.memory_size=16
+      - recent_baseline.prototype_count=8
+      - recent_baseline.spaces=3
+      - recent_baseline.space_dim=32
+  - config: ../flowgraph.yaml
+    model: himnet
+    overrides: &native_flowgraph
+      - training.epochs=30
+      - training.batch_size=16
+      - evaluation.batch_size=16
+      - recent_baseline.hidden_dim=64
+      - recent_baseline.output_dim=64
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=128
+      - recent_baseline.memory_size=16
+      - recent_baseline.prototype_count=8
+      - recent_baseline.spaces=3
+      - recent_baseline.space_dim=32
+  - config: ../hdfs.yaml
+    model: himnet
+    overrides: *native_common
+  - config: ../adfa_ld.yaml
+    model: himnet
+    overrides: *native_common
+
+  - config: ../tracelog.yaml
+    model: gladpro
+    overrides: *native_common
+  - config: ../flowgraph.yaml
+    model: gladpro
+    overrides: *native_flowgraph
+  - config: ../hdfs.yaml
+    model: gladpro
+    overrides: *native_common
+  - config: ../adfa_ld.yaml
+    model: gladpro
+    overrides: *native_common
+
+  - config: ../tracelog.yaml
+    model: mssgad
+    overrides: *native_common
+  - config: ../flowgraph.yaml
+    model: mssgad
+    overrides: *native_flowgraph
+  - config: ../hdfs.yaml
+    model: mssgad
+    overrides: *native_common
+  - config: ../adfa_ld.yaml
+    model: mssgad
+    overrides: *native_common

@@ -11,8 +11,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 
 from .data import load_dataset, load_provided_splits, make_splits
+from .graph import batch_graphs
 from .metrics import anomaly_metrics, normal_score_threshold
 from .utils import parameter_count, resolve_device, seed_everything
 
@@ -140,6 +142,16 @@ def _evaluation_loader(graphs, batch_size):
     return DataLoader(graphs, batch_sampler=batches)
 
 
+def _index_batches(indices: list[int], batch_size: int, *, shuffle: bool) -> list[list[int]]:
+    values = np.asarray(indices, dtype=np.int64)
+    if shuffle:
+        np.random.shuffle(values)
+    return [
+        values[start : start + batch_size].tolist()
+        for start in range(0, len(values), batch_size)
+    ]
+
+
 def _score_audit(labels, scores, normal_scores):
     labels_array = np.asarray(labels, dtype=np.int64)
     scores_array = np.asarray(scores, dtype=np.float64)
@@ -158,6 +170,28 @@ def _score_audit(labels, scores, normal_scores):
         "normal_calibration_score_median": float(np.median(normal_array)),
         "normal_calibration_score_q95": float(np.quantile(normal_array, 0.95)),
     }
+
+
+def _save_fair_checkpoint(
+    output: Path,
+    *,
+    config: dict[str, Any],
+    seed: int,
+    epoch: int,
+    model_states: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    checkpoint_dir = output / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "epoch": epoch,
+        "seed": seed,
+        "config": config,
+        "model_states": model_states,
+        "metadata": metadata or {},
+    }
+    torch.save(payload, checkpoint_dir / "best.pt")
+    torch.save(payload, checkpoint_dir / "last.pt")
 
 
 def _contrastive_losses(outputs, batch, temperature=0.2):
@@ -245,6 +279,329 @@ def _node_contrastive_loss(left, right, batch, temperature=0.2):
         + torch.log(positive / negative_rows + 1e-12)
     )
     return global_mean_pool(loss, batch)
+
+
+class NativeGraphEncoder(nn.Module):
+    def __init__(
+        self,
+        *,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_node_types: int,
+        num_edge_types: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.node_type_embedding = nn.Embedding(num_node_types, hidden_dim)
+        self.edge_type_embedding = nn.Embedding(num_edge_types, hidden_dim)
+        self.input_projection = nn.Linear(input_dim, hidden_dim)
+        self.self_layers = nn.ModuleList(
+            nn.Linear(hidden_dim, hidden_dim) for _ in range(num_layers)
+        )
+        self.message_layers = nn.ModuleList(
+            nn.Linear(hidden_dim, hidden_dim) for _ in range(num_layers)
+        )
+        self.output_projection = nn.Sequential(
+            nn.Linear(hidden_dim * 2, output_dim),
+            nn.ReLU(),
+            nn.Linear(output_dim, output_dim),
+        )
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, graph) -> torch.Tensor:
+        h = self.input_projection(graph.x.float()) + self.node_type_embedding(
+            graph.node_type.long()
+        )
+        for self_layer, message_layer in zip(self.self_layers, self.message_layers):
+            src, dst = graph.edge_index.long()
+            edge_context = self.edge_type_embedding(graph.edge_type.long())
+            messages = message_layer(h[src] + edge_context)
+            aggregated = torch.zeros_like(h)
+            aggregated.index_add_(0, dst, messages)
+            degree = torch.zeros(h.shape[0], 1, device=h.device, dtype=h.dtype)
+            degree.index_add_(0, dst, torch.ones_like(messages[:, :1]))
+            aggregated = aggregated / degree.clamp_min(1.0)
+            h = torch.relu(self_layer(h) + aggregated)
+            h = self.dropout(h)
+        batch = graph.batch
+        if batch is None:
+            batch = torch.zeros(h.shape[0], device=h.device, dtype=torch.long)
+        graph_count = int(batch.max().item()) + 1 if batch.numel() else 1
+        mean_pool = torch.zeros(graph_count, h.shape[1], device=h.device, dtype=h.dtype)
+        mean_pool.index_add_(0, batch, h)
+        counts = torch.zeros(graph_count, 1, device=h.device, dtype=h.dtype)
+        counts.index_add_(0, batch, torch.ones_like(h[:, :1]))
+        mean_pool = mean_pool / counts.clamp_min(1.0)
+        max_pool = torch.full_like(mean_pool, -torch.inf)
+        max_pool.scatter_reduce_(
+            0,
+            batch[:, None].expand_as(h),
+            h,
+            reduce="amax",
+            include_self=True,
+        )
+        max_pool = torch.where(torch.isfinite(max_pool), max_pool, torch.zeros_like(max_pool))
+        return self.output_projection(torch.cat([mean_pool, max_pool], dim=1))
+
+
+class HimNetNative(nn.Module):
+    def __init__(self, encoder: NativeGraphEncoder, memory_size: int) -> None:
+        super().__init__()
+        self.encoder = encoder
+        output_dim = encoder.output_projection[-1].out_features
+        self.memory = nn.Parameter(torch.randn(memory_size, output_dim) * 0.02)
+
+    def forward(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        embedding = self.encoder(graph)
+        attention = torch.softmax(
+            embedding @ self.memory.T / max(embedding.shape[1] ** 0.5, 1.0),
+            dim=1,
+        )
+        reconstructed = attention @ self.memory
+        return embedding, reconstructed
+
+    def loss_and_score(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        embedding, reconstructed = self(graph)
+        reconstruction = (embedding - reconstructed).square().mean(dim=1)
+        nearest = torch.cdist(embedding, self.memory).min(dim=1).values.square()
+        score = reconstruction + 0.1 * nearest
+        return score.mean(), score
+
+
+class GLADProNative(nn.Module):
+    def __init__(self, encoder: NativeGraphEncoder, prototype_count: int) -> None:
+        super().__init__()
+        self.encoder = encoder
+        output_dim = encoder.output_projection[-1].out_features
+        self.prototypes = nn.Parameter(torch.randn(prototype_count, output_dim) * 0.02)
+
+    def loss_and_score(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        embedding = self.encoder(graph)
+        distances = torch.cdist(embedding, self.prototypes).square()
+        assignment = torch.softmax(-distances, dim=1)
+        min_distance = distances.min(dim=1).values
+        entropy = -(assignment * (assignment + 1e-12).log()).sum(dim=1)
+        if self.prototypes.shape[0] > 1:
+            prototype_distance = torch.pdist(self.prototypes).square().mean()
+            diversity = 1.0 / prototype_distance.clamp_min(1e-6)
+        else:
+            diversity = torch.zeros((), device=embedding.device)
+        loss = min_distance.mean() + 0.02 * entropy.mean() + 0.01 * diversity
+        score = min_distance + 0.05 * entropy
+        return loss, score
+
+
+class MssGADNative(nn.Module):
+    def __init__(
+        self,
+        encoder: NativeGraphEncoder,
+        *,
+        spaces: int,
+        space_dim: int,
+    ) -> None:
+        super().__init__()
+        self.encoder = encoder
+        output_dim = encoder.output_projection[-1].out_features
+        self.projections = nn.ModuleList(
+            nn.Sequential(nn.Linear(output_dim, space_dim), nn.ReLU(), nn.Linear(space_dim, space_dim))
+            for _ in range(spaces)
+        )
+        self.register_buffer("centers", torch.zeros(spaces, space_dim))
+        self.register_buffer("centers_initialized", torch.tensor(False))
+
+    @torch.no_grad()
+    def initialize_centers(self, graph) -> None:
+        embedding = self.encoder(graph)
+        centers = [projection(embedding).mean(dim=0) for projection in self.projections]
+        self.centers.copy_(torch.stack(centers))
+        self.centers_initialized.fill_(True)
+
+    def loss_and_score(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        embedding = self.encoder(graph)
+        distances = []
+        projected = []
+        for index, projection in enumerate(self.projections):
+            value = projection(embedding)
+            projected.append(torch.nn.functional.normalize(value, dim=1, eps=1e-12))
+            distances.append((value - self.centers[index]).square().mean(dim=1))
+        stacked = torch.stack(distances, dim=1)
+        separation = torch.zeros((), device=embedding.device)
+        for left in range(len(projected)):
+            for right in range(left + 1, len(projected)):
+                separation = separation + (projected[left] * projected[right]).sum(dim=1).abs().mean()
+        loss = stacked.mean() + 0.05 * separation
+        return loss, stacked.mean(dim=1)
+
+
+def _native_model(config: dict[str, Any], architecture: str) -> nn.Module:
+    baseline = config.get("recent_baseline", {})
+    encoder = NativeGraphEncoder(
+        input_dim=int(config["dataset"]["feature_dim"]),
+        hidden_dim=int(baseline.get("hidden_dim", 64)),
+        output_dim=int(baseline.get("output_dim", 64)),
+        num_node_types=int(config["dataset"]["num_node_types"]),
+        num_edge_types=int(config["dataset"]["num_edge_types"]),
+        num_layers=int(baseline.get("num_layers", 3)),
+        dropout=float(baseline.get("dropout", 0.1)),
+    )
+    if architecture == "himnet":
+        return HimNetNative(encoder, int(baseline.get("memory_size", 16)))
+    if architecture == "gladpro":
+        return GLADProNative(encoder, int(baseline.get("prototype_count", 8)))
+    if architecture == "mssgad":
+        return MssGADNative(
+            encoder,
+            spaces=int(baseline.get("spaces", 3)),
+            space_dim=int(baseline.get("space_dim", 32)),
+        )
+    raise ValueError(f"Unsupported native graph baseline: {architecture}")
+
+
+def run_native_graph_fair(
+    config: dict[str, Any],
+    *,
+    architecture: str,
+) -> dict[str, Any]:
+    names = {
+        "himnet": "HimNet",
+        "gladpro": "GLADPro",
+        "mssgad": "MssGAD",
+    }
+    if architecture not in names:
+        raise ValueError(f"Unsupported native graph baseline: {architecture}")
+    baseline = config.get("recent_baseline", {})
+    seed = int(config["training"].get("seed", 42))
+    seed_everything(seed)
+    device = resolve_device(config["training"].get("device", "auto"))
+    dataset = load_dataset(config["dataset"])
+    splits = _limited_splits(
+        dataset,
+        _splits(config, dataset),
+        baseline.get("max_graphs_per_split"),
+        seed=seed,
+    )
+    selected = sorted({index for values in splits.values() for index in values})
+    graphs = {index: dataset[index] for index in selected}
+    model = _native_model(config, architecture).to(device)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=float(config["training"].get("learning_rate", 1e-3)),
+        weight_decay=float(config["training"].get("weight_decay", 1e-6)),
+    )
+    batch_size = int(config["training"].get("batch_size", 32))
+    epochs = int(config["training"].get("epochs", 100))
+    if isinstance(model, MssGADNative):
+        init_indices = splits["train"][: min(len(splits["train"]), max(batch_size, 2))]
+        model.initialize_centers(batch_graphs([graphs[index] for index in init_indices]).to(device))
+    history = []
+    training_start = time.perf_counter()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+    for epoch in range(1, epochs + 1):
+        model.train()
+        started = time.perf_counter()
+        total = 0.0
+        count = 0
+        for batch in _index_batches(splits["train"], batch_size, shuffle=True):
+            graph = batch_graphs([graphs[index] for index in batch]).to(device)
+            optimizer.zero_grad()
+            loss, _ = model.loss_and_score(graph)
+            loss.backward()
+            optimizer.step()
+            total += float(loss.detach()) * len(batch)
+            count += len(batch)
+        history.append(
+            {
+                "epoch": epoch,
+                "loss": total / max(count, 1),
+                "epoch_seconds": time.perf_counter() - started,
+            }
+        )
+        print(
+            f"[{names[architecture]}-fair] epoch={epoch} loss={history[-1]['loss']:.6f}",
+            flush=True,
+        )
+
+    def score(indices: list[int]) -> tuple[list[int], list[float], list[int]]:
+        labels, scores, graph_ids = [], [], []
+        model.eval()
+        with torch.no_grad():
+            for batch in _index_batches(
+                indices,
+                int(config["evaluation"].get("batch_size", batch_size)),
+                shuffle=False,
+            ):
+                graph = batch_graphs([graphs[index] for index in batch]).to(device)
+                _, values = model.loss_and_score(graph)
+                scores.extend(values.detach().cpu().tolist())
+                labels.extend([graphs[index].label for index in batch])
+                graph_ids.extend([graphs[index].graph_id for index in batch])
+        return labels, scores, graph_ids
+
+    training_seconds = time.perf_counter() - training_start
+    train_labels, train_scores, train_graph_ids = score(splits["train"])
+    threshold = normal_score_threshold(
+        train_scores,
+        float(config["evaluation"].get("threshold_quantile", 0.99)),
+    )
+    labels, scores, graph_ids = score(splits["test"])
+    metrics = anomaly_metrics(
+        labels,
+        scores,
+        threshold=threshold,
+        alert_fraction=float(config["evaluation"].get("alert_fraction", 0.01)),
+        target_fpr=float(config["evaluation"].get("target_fpr", 0.01)),
+    )
+    output = (
+        Path(config["output"].get("results_root", "artifacts/results"))
+        / config["dataset"]["name"]
+        / f"{names[architecture]}-fair"
+        / f"seed_{seed}"
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(history).to_csv(output / "history.csv", index=False)
+    pd.DataFrame(
+        {"graph_id": train_graph_ids, "label": train_labels, "score": train_scores}
+    ).to_csv(output / "normal_calibration_predictions.csv", index=False)
+    pd.DataFrame({"graph_id": graph_ids, "label": labels, "score": scores}).to_csv(
+        output / "test_predictions.csv", index=False
+    )
+    summary = {
+        **metrics,
+        **_score_audit(labels, scores, train_scores),
+        "dataset": config["dataset"]["name"],
+        "variant": f"{names[architecture]}-fair",
+        "experimental_stage": baseline.get("experimental_stage", "standalone"),
+        "seed": seed,
+        "epochs_completed": epochs,
+        "training_seconds": training_seconds,
+        "parameters": parameter_count(model),
+        "peak_gpu_memory_mb": (
+            torch.cuda.max_memory_allocated(device) / (1024**2)
+            if device.type == "cuda"
+            else 0.0
+        ),
+        "device": str(device),
+        "checkpoint_selection": "fixed_epoch",
+        "threshold_source": "normal_train_scores",
+        "scoring_protocol": f"{architecture}_native_graph_one_class",
+        "train_graphs": len(train_scores),
+        "subset_sampling": "seeded_stratified_random",
+    }
+    _save_fair_checkpoint(
+        output,
+        config=config,
+        seed=seed,
+        epoch=epochs,
+        model_states={"model": model.state_dict()},
+        metadata={"architecture": architecture},
+    )
+    (output / "metrics.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return summary
 
 
 def _dual_view_outputs(model, data, args, mamba):
@@ -561,6 +918,18 @@ def run_dual_view_fair(
         "train_graphs": len(train_labels),
         "numerically_stabilized": True,
     }
+    _save_fair_checkpoint(
+        output,
+        config=config,
+        seed=seed,
+        epoch=epochs,
+        model_states={"model": model.state_dict()},
+        metadata={
+            "official_name": official_name,
+            "statistics": statistics,
+            "anchor_count": anchor_count,
+        },
+    )
     (output / "metrics.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -766,6 +1135,14 @@ def run_signet_fair(
         "train_graphs": len(train_labels),
         "numerically_stabilized": True,
     }
+    _save_fair_checkpoint(
+        output,
+        config=config,
+        seed=seed,
+        epoch=epochs,
+        model_states={"model": model.state_dict()},
+        metadata={"official_name": "SIGNET", "anchor_count": anchor_count},
+    )
     (output / "metrics.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1007,6 +1384,23 @@ def run_muse_fair(
         "train_graphs": len(local_splits["train"]),
         "dense_adjacency_limit": max_dense_nodes,
     }
+    _save_fair_checkpoint(
+        output,
+        config=config,
+        seed=seed,
+        epoch=representation_epochs,
+        model_states={
+            "representation": model.state_dict(),
+            "feature_decoder": feature_decoder.state_dict(),
+            "edge_decoder": edge_decoder.state_dict(),
+            "classifier": classifier.state_dict(),
+        },
+        metadata={
+            "official_name": "MUSE",
+            "classifier_epochs": classifier_epochs,
+            "local_splits": local_splits,
+        },
+    )
     (output / "metrics.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )

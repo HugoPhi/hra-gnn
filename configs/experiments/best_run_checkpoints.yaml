@@ -1,0 +1,52 @@
+name: best_run_checkpoints
+stage: final_table_best_run_checkpoint_rerun
+results_root: artifacts/results/best_run_checkpoints
+external_root: external
+
+jobs:
+  # TraceLog
+  - {method: CVTGAD, runner: fair, fair_model: cvtgad, config: ../tracelog.yaml, seed: 33, overrides: &fair_common [training.epochs=30, training.batch_size=32, evaluation.batch_size=32, recent_baseline.reference_graphs=64, recent_baseline.max_graphs_per_split=1000]}
+  - {method: DeepTraLog, runner: trainer, config: ../tracelog.yaml, seed: 33, overrides: &deeptralog [model.architecture=deeptralog, ssl.enabled=false, evaluation.score_ssl_weight=0.0]}
+  - {method: GLADMamba, runner: fair, fair_model: gladmamba, config: ../tracelog.yaml, seed: 22, overrides: *fair_common}
+  - {method: GLocalKD, runner: trainer, config: ../tracelog.yaml, seed: 33, overrides: &glocalkd [model.architecture=glocalkd, ssl.enabled=false, evaluation.score_ssl_weight=0.0]}
+  - {method: HGT, runner: trainer, config: ../tracelog.yaml, seed: 33, overrides: &hgt [model.architecture=hgt, ssl.enabled=false, evaluation.score_ssl_weight=0.0]}
+  - {method: HRA-GNN, runner: trainer, config: ../tracelog.yaml, seed: 15, overrides: &hra_tracelog [training.epochs=15, training.batch_size=16, training.max_train_graphs=2000, training.early_stopping_patience=4, evaluation.max_graphs=4000, evaluation.sampling=seeded_stratified, model.architecture=hra, model.relation_fusion=deviation_attention, model.readout=hybrid]}
+  - {method: HRGCN, runner: trainer, config: ../tracelog.yaml, seed: 33, overrides: &hrgcn [model.architecture=hrgcn, model.relation_fusion=static_concat, model.readout=max]}
+  - {method: MUSE, runner: fair, fair_model: muse, config: ../tracelog.yaml, seed: 11, overrides: &muse_common [recent_baseline.muse_representation_epochs=30, recent_baseline.muse_classifier_epochs=100, recent_baseline.max_graphs_per_split=1000, recent_baseline.muse_max_dense_nodes=5000]}
+  - {method: OCHetGCN, runner: trainer, config: ../tracelog.yaml, seed: 33, overrides: &ochetgcn [model.architecture=ochetgcn, model.relation_fusion=static_concat, model.readout=max, ssl.enabled=false, evaluation.score_ssl_weight=0.0]}
+  - {method: SIGNET, runner: fair, fair_model: signet, config: ../tracelog.yaml, seed: 11, overrides: *fair_common}
+
+  # FlowGraph
+  - {method: CVTGAD, runner: fair, fair_model: cvtgad, config: ../flowgraph.yaml, seed: 22, overrides: &fair_flowgraph [training.epochs=30, training.batch_size=2, evaluation.batch_size=2, recent_baseline.reference_graphs=16, recent_baseline.max_graphs_per_split=64]}
+  - {method: DeepTraLog, runner: trainer, config: ../flowgraph.yaml, seed: 22, overrides: *deeptralog}
+  - {method: GLADMamba, runner: fair, fair_model: gladmamba, config: ../flowgraph.yaml, seed: 33, overrides: *fair_flowgraph}
+  - {method: GLocalKD, runner: trainer, config: ../flowgraph.yaml, seed: 33, overrides: *glocalkd}
+  - {method: HGT, runner: trainer, config: ../flowgraph.yaml, seed: 11, overrides: *hgt}
+  - {method: HRA-GNN, runner: trainer, config: ../flowgraph.yaml, seed: 10, overrides: &hra_flowgraph [training.epochs=15, training.early_stopping_patience=4, evaluation.sampling=seeded_stratified, model.architecture=hra, model.relation_fusion=deviation_attention, model.readout=hybrid]}
+  - {method: HRGCN, runner: trainer, config: ../flowgraph.yaml, seed: 11, overrides: *hrgcn}
+  - {method: OCHetGCN, runner: trainer, config: ../flowgraph.yaml, seed: 33, overrides: *ochetgcn}
+  - {method: SIGNET, runner: fair, fair_model: signet, config: ../flowgraph.yaml, seed: 33, overrides: [training.epochs=30, training.batch_size=16, evaluation.batch_size=16, recent_baseline.reference_graphs=32, recent_baseline.max_graphs_per_split=64]}
+
+  # HDFS
+  - {method: CVTGAD, runner: fair, fair_model: cvtgad, config: ../hdfs.yaml, seed: 11, overrides: *fair_common}
+  - {method: DeepTraLog, runner: trainer, config: ../hdfs.yaml, seed: 11, overrides: &deeptralog_svdd [training.epochs=10, training.early_stopping_patience=3, model.architecture=deeptralog, ssl.enabled=false, evaluation.score_mode=svdd]}
+  - {method: GLADMamba, runner: fair, fair_model: gladmamba, config: ../hdfs.yaml, seed: 33, overrides: *fair_common}
+  - {method: GLocalKD, runner: trainer, config: ../hdfs.yaml, seed: 22, overrides: &glocalkd_svdd [training.epochs=10, training.early_stopping_patience=3, model.architecture=glocalkd, ssl.enabled=false, evaluation.score_mode=svdd]}
+  - {method: HGT, runner: trainer, config: ../hdfs.yaml, seed: 11, overrides: &hgt_svdd [training.epochs=10, training.early_stopping_patience=3, model.architecture=hgt, ssl.enabled=false, evaluation.score_mode=svdd]}
+  - {method: HRA-GNN, runner: trainer, config: ../hdfs.yaml, seed: 5, overrides: &hra_hdfs [training.epochs=10, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.sampling=seeded_stratified, model.architecture=hra, model.relation_fusion=deviation_attention, model.readout=hybrid]}
+  - {method: HRGCN, runner: trainer, config: ../hdfs.yaml, seed: 33, overrides: &hrgcn_svdd [training.epochs=10, training.early_stopping_patience=3, evaluation.score_mode=svdd, model.architecture=hrgcn, model.relation_fusion=static_concat, model.readout=max]}
+  - {method: MUSE, runner: fair, fair_model: muse, config: ../hdfs.yaml, seed: 11, overrides: *muse_common}
+  - {method: OCHetGCN, runner: trainer, config: ../hdfs.yaml, seed: 22, overrides: &ochetgcn_svdd [training.epochs=10, training.early_stopping_patience=3, evaluation.score_mode=svdd, model.architecture=ochetgcn, model.relation_fusion=static_concat, model.readout=max, ssl.enabled=false]}
+  - {method: SIGNET, runner: fair, fair_model: signet, config: ../hdfs.yaml, seed: 33, overrides: *fair_common}
+
+  # ADFA-LD
+  - {method: CVTGAD, runner: fair, fair_model: cvtgad, config: ../adfa_ld.yaml, seed: 33, overrides: *fair_common}
+  - {method: DeepTraLog, runner: trainer, config: ../adfa_ld.yaml, seed: 11, overrides: &deeptralog_adfa [training.epochs=10, training.batch_size=8, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=8, model.architecture=deeptralog, ssl.enabled=false]}
+  - {method: GLADMamba, runner: fair, fair_model: gladmamba, config: ../adfa_ld.yaml, seed: 33, overrides: *fair_common}
+  - {method: GLocalKD, runner: trainer, config: ../adfa_ld.yaml, seed: 33, overrides: &glocalkd_adfa [training.epochs=10, training.batch_size=8, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=8, model.architecture=glocalkd, ssl.enabled=false]}
+  - {method: HGT, runner: trainer, config: ../adfa_ld.yaml, seed: 22, overrides: &hgt_adfa [training.epochs=10, training.batch_size=8, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=8, model.architecture=hgt, ssl.enabled=false]}
+  - {method: HRA-GNN, runner: trainer, config: ../adfa_ld.yaml, seed: 9, overrides: &hra_adfa [training.epochs=10, training.batch_size=4, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=4, evaluation.sampling=seeded_stratified, model.architecture=hra, model.relation_fusion=deviation_attention, model.readout=hybrid]}
+  - {method: HRGCN, runner: trainer, config: ../adfa_ld.yaml, seed: 22, overrides: &hrgcn_adfa [training.epochs=10, training.batch_size=4, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=4, model.architecture=hrgcn, model.relation_fusion=static_concat, model.readout=max]}
+  - {method: MUSE, runner: fair, fair_model: muse, config: ../adfa_ld.yaml, seed: 33, overrides: *muse_common}
+  - {method: OCHetGCN, runner: trainer, config: ../adfa_ld.yaml, seed: 11, overrides: &ochetgcn_adfa [training.epochs=10, training.batch_size=8, training.early_stopping_patience=3, evaluation.score_mode=svdd, evaluation.batch_size=8, model.architecture=ochetgcn, model.relation_fusion=static_concat, model.readout=max, ssl.enabled=false]}
+  - {method: SIGNET, runner: fair, fair_model: signet, config: ../adfa_ld.yaml, seed: 33, overrides: *fair_common}

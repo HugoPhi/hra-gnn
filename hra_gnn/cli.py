@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .adfa_scoring import rescore_adfa_hybrid
+from .checkpoint_runs import run_best_checkpoint_matrix
 from .config import apply_overrides, load_config, validate_config
 from .data import CSVGraphDataset, load_dataset
 from .diagnostics import run_diagnostics
@@ -23,6 +24,7 @@ from .preprocessing import prepare_adfa_ld, prepare_hdfs
 from .recent_baselines import (
     run_dual_view_fair,
     run_muse_fair,
+    run_native_graph_fair,
     run_signet_fair,
 )
 from .recent_experiments import run_fair_matrix
@@ -125,7 +127,15 @@ def build_parser() -> argparse.ArgumentParser:
     fair.add_argument(
         "--model",
         required=True,
-        choices=("signet", "cvtgad", "muse", "gladmamba"),
+        choices=(
+            "signet",
+            "cvtgad",
+            "muse",
+            "gladmamba",
+            "himnet",
+            "gladpro",
+            "mssgad",
+        ),
     )
     fair.add_argument("--external-root", default="external")
     fair.add_argument(
@@ -135,6 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
     fair_matrix = subparsers.add_parser("fair-matrix")
     fair_matrix.add_argument("--matrix", required=True)
     fair_matrix.add_argument("--force", action="store_true")
+
+    best_checkpoints = subparsers.add_parser("best-checkpoints")
+    best_checkpoints.add_argument("--matrix", required=True)
+    best_checkpoints.add_argument("--force", action="store_true")
 
     rescore = subparsers.add_parser("calibrated-rescore")
     rescore.add_argument("--config", required=True)
@@ -280,6 +294,8 @@ def main() -> None:
             summary = run_signet_fair(config, external_root=arguments.external_root)
         elif arguments.model == "muse":
             summary = run_muse_fair(config, external_root=arguments.external_root)
+        elif arguments.model in {"himnet", "gladpro", "mssgad"}:
+            summary = run_native_graph_fair(config, architecture=arguments.model)
         else:
             summary = run_dual_view_fair(
                 config,
@@ -289,6 +305,13 @@ def main() -> None:
         print(json.dumps(summary, indent=2))
     elif arguments.command == "fair-matrix":
         root, rows = run_fair_matrix(arguments.matrix, resume=not arguments.force)
+        complete = int((rows["status"] == "complete").sum())
+        print(f"Wrote {len(rows)} runs ({complete} complete) to {root.resolve()}")
+    elif arguments.command == "best-checkpoints":
+        root, rows = run_best_checkpoint_matrix(
+            arguments.matrix,
+            resume=not arguments.force,
+        )
         complete = int((rows["status"] == "complete").sum())
         print(f"Wrote {len(rows)} runs ({complete} complete) to {root.resolve()}")
     elif arguments.command == "calibrated-rescore":

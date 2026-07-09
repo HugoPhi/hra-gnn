@@ -13,6 +13,7 @@ from .config import apply_overrides, load_config
 from .recent_baselines import (
     run_dual_view_fair,
     run_muse_fair,
+    run_native_graph_fair,
     run_signet_fair,
 )
 
@@ -21,6 +22,9 @@ MODEL_NAMES = {
     "cvtgad": "CVTGAD-fair",
     "muse": "MUSE-fair",
     "gladmamba": "GLADMamba-fair",
+    "himnet": "HimNet-fair",
+    "gladpro": "GLADPro-fair",
+    "mssgad": "MssGAD-fair",
 }
 
 
@@ -29,6 +33,8 @@ def _run_model(config: dict[str, Any], model: str, external_root: str | Path):
         return run_signet_fair(config, external_root=external_root)
     if model == "muse":
         return run_muse_fair(config, external_root=external_root)
+    if model in {"himnet", "gladpro", "mssgad"}:
+        return run_native_graph_fair(config, architecture=model)
     return run_dual_view_fair(config, architecture=model, external_root=external_root)
 
 
