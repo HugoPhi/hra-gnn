@@ -21,7 +21,8 @@ def load_summary(paths: list[Path]) -> pd.DataFrame:
     frames = []
     for path in paths:
         frame = pd.read_csv(path)
-        frame = frame[frame.get("status", "complete") == "complete"]
+        if "status" in frame:
+            frame = frame[frame["status"].fillna("complete") == "complete"]
         frames.append(frame)
     runs = pd.concat(frames, ignore_index=True)
     summary = (
@@ -68,13 +69,31 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
         r"\midrule",
     ]
     indexed = summary.set_index(["variant", "dataset"])
+    best_values = {
+        (dataset, metric): float(
+            summary[summary["dataset"] == dataset][f"{metric}_mean"].max()
+        )
+        for dataset in DATASET_ORDER
+        for metric in ("auc", "ap")
+    }
     for variant in VARIANT_ORDER:
         row = [variant]
         for dataset in DATASET_ORDER:
             values = indexed.loc[(variant, dataset)]
-            bold = variant == "Ours (Full)"
-            row.append(format_score(float(values["auc_mean"]), bold=bold))
-            row.append(format_score(float(values["ap_mean"]), bold=bold))
+            auc = float(values["auc_mean"])
+            ap = float(values["ap_mean"])
+            row.append(
+                format_score(
+                    auc,
+                    bold=abs(auc - best_values[(dataset, "auc")]) < 1e-12,
+                )
+            )
+            row.append(
+                format_score(
+                    ap,
+                    bold=abs(ap - best_values[(dataset, "ap")]) < 1e-12,
+                )
+            )
         lines.append(" & ".join(row) + r" \\")
         if variant == "w/o SSL":
             lines.append(r"\midrule")

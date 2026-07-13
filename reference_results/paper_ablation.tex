@@ -1,0 +1,29 @@
+% 需要 \usepackage{booktabs,graphicx}
+\begin{table*}[t]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{0.94}
+\setlength{\tabcolsep}{4pt}
+\caption{消融实验性能对比}
+\label{tab:ablation_results}
+\begin{tabular}{lcccccc}
+\toprule
+\multirow{2}{*}{模型变体} & \multicolumn{2}{c}{TraceLog} & \multicolumn{2}{c}{FlowGraph} & \multicolumn{2}{c}{ADFA-LD} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & AUROC & AP & AUROC & AP & AUROC & AP \\
+\midrule
+Static Concat & 0.7711 & 0.7198 & 0.9843 & \textbf{0.9878} & \textbf{0.8169} & 0.5123 \\
+Dynamic Attention & \textbf{0.8033} & \textbf{0.7407} & 0.6708 & 0.7519 & 0.7936 & 0.5007 \\
+Only Max-Pooling & 0.7312 & 0.6474 & \textbf{0.9930} & 0.9730 & 0.8046 & \textbf{0.5130} \\
+Only Mean-Pooling & 0.6214 & 0.5847 & 0.9836 & 0.9866 & 0.7579 & 0.4409 \\
+w/o SSL & 0.7897 & 0.7116 & 0.9748 & 0.9840 & 0.7902 & 0.4957 \\
+\midrule
+Ours (Full) & 0.7958 & 0.7216 & 0.6655 & 0.7463 & 0.7919 & 0.4989 \\
+\bottomrule
+\end{tabular}%
+\par\vspace{2pt}
+\begin{minipage}{\textwidth}
+\scriptsize
+说明：表中数值为 3 个随机种子的平均值。ADFA-LD 使用与结构消融一致的 SVDD 图级异常分数，不叠加系统调用词频近邻或 Markov 序列后处理，以避免后处理收益掩盖模型结构模块的贡献。
+\end{minipage}
+\end{table*}
