@@ -63,7 +63,7 @@ reference_results/hra_seed_sweep_summary.csv
 当前候选主表已经足以判断方法方向和组织论文结果，但还不是完全相同预算的严格
 公平表：
 
-- HRA-GNN 汇总 22 个 seed，多数 baseline 汇总 3 个 seed；
+- HRA-GNN 汇总 22 个候选 seed，并对 ADFA-LD 补充轻量训练超参候选；多数 baseline 汇总 3 个 seed；
 - 近期方法和直接基线在 TraceLog、FlowGraph、HDFS 上使用过不同采样上限；
 - 早期双 RTX 4090 性能记录与最终 V100 主表记录并存，效率表只能使用同一轮
   V100 协议下的记录；

@@ -1,0 +1,7 @@
+seed,learning_rate,ssl_weight,auc,ap,full_auc,full_ap,checkpoint
+33,0.0001,0.10,0.8227300000000001,0.82745773033253,0.8246212186249813,0.6360507626704023,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_33_lr_0.0001_ssl_0.10/seed_33/checkpoints/best.pt
+9,0.00005,0.10,0.838266,0.8388349685349009,0.8339166006441184,0.6454839326248234,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_9_lr_0.00005_ssl_0.10/seed_9/checkpoints/best.pt
+9,0.0002,0.10,0.840036,0.8372564611122636,0.839251856194305,0.6467056079970268,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_9_lr_0.0002_ssl_0.10/seed_9/checkpoints/best.pt
+9,0.0001,0.05,0.8418740000000001,0.838963698598932,0.8420922565975535,0.6469564797925984,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_9_lr_0.0001_ssl_0.05/seed_9/checkpoints/best.pt
+9,0.0001,0.20,0.864958,0.8525903905138927,0.859591502346151,0.6595062251025823,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_9_lr_0.0001_ssl_0.20/seed_9/checkpoints/best.pt
+33,0.00005,0.10,0.8305440000000001,0.8330680864970907,0.8289348621130321,0.6374774976643568,artifacts/results/ADFA-LD/adfa_ld_full_hparam_extension/HRA-GNN_seed_33_lr_0.00005_ssl_0.10/seed_33/checkpoints/best.pt

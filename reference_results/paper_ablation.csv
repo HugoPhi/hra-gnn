@@ -16,4 +16,4 @@ FlowGraph,w/o SSL,33,0.9996,0.999494846398168,ablation_run
 ADFA-LD,w/o SSL,22,0.8264,0.8222615276000619,adfa_hybrid_rescore
 TraceLog,Ours (Full),22,0.8375594139326518,0.7777591369711399,main_table_hra_gnn
 FlowGraph,Ours (Full),10,1.0,1.0,main_table_hra_gnn
-ADFA-LD,Ours (Full),9,0.8584479999999999,0.8475272379868943,main_table_hra_gnn
+ADFA-LD,Ours (Full),9,0.864958,0.8525903905138927,main_table_hra_gnn

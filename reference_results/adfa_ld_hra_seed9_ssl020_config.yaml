@@ -1,0 +1,79 @@
+dataset:
+  name: ADFA-LD
+  kind: packed
+  root: data/ProcessedData_ADFA_LD
+  feature_dim: 8
+  num_node_types: 151
+  num_edge_types: 3
+  cache_graphs: false
+  split:
+    train_normal_ratio: 0.6
+    validation_normal_ratio: 0.2
+    validation_anomaly_ratio: 0.0
+    mode: provided
+    train_file: train_ids.txt
+    validation_file: validation_ids.txt
+    test_file: test_ids.txt
+model:
+  hidden_dim: 128
+  output_dim: 128
+  num_layers: 2
+  relation_fusion: deviation_attention
+  deviation_weight: 1.0
+  attention_temperature: 1.0
+  prototype_momentum: 0.9
+  prototype_min_scale: 0.001
+  readout: hybrid
+  deviation_score_pool: topk
+  deviation_score_topk_fraction: 0.05
+  dropout: 0.1
+  relation_schema: edge_only
+  architecture: hra
+augmentation:
+  methods:
+  - edge_perturbation
+  - node_type_swap
+  edge_perturbation_rate: 0.1
+  edge_addition_rate: 0.1
+  node_type_swap_rate: 0.1
+  edge_type_swap_rate: 0.1
+  preserve_observed_schema: true
+ssl:
+  enabled: true
+  loss_weight: 0.2
+training:
+  seed: 9
+  device: auto
+  epochs: 10
+  batch_size: 4
+  learning_rate: 0.0001
+  weight_decay: 1.0e-06
+  gradient_clip: 5.0
+  evaluate_every: 1
+  early_stopping_patience: 3
+evaluation:
+  score_mode: svdd
+  score_ssl_weight: 0.1
+  collect_diagnostics: false
+  alert_fraction: 0.01
+  target_fpr: 0.01
+  threshold_quantile: 0.99
+  batch_size: 4
+  sampling: seeded_stratified
+monitoring:
+  enabled: false
+  log_dir: artifacts/tensorboard
+  flush_seconds: 10
+  validation_fraction_from_test: 0.5
+output:
+  results_root: artifacts/results
+  figures_root: artifacts/figures
+  run_name: adfa_ld_full_hparam_extension/HRA-GNN_seed_9_lr_0.0001_ssl_0.20
+recent_baseline:
+  rw_dim: 16
+  dg_dim: 16
+  hidden_dim: 16
+  num_layers: 5
+  adaptive: 1
+  alpha: 0.0
+  graph_level_pool: global_mean_pool

@@ -157,7 +157,8 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
             "Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。"
             "ADFA-LD 列统一采用固定 ADFA-LD-1000 测试子集和由正常训练集拟合的 "
             "SVDD、系统调用词频近邻、三阶 Markov 序列混合评分；"
-            "其中 Ours (Full) 取自主表 seed 9，其他消融变体由对应 checkpoint 重新评分。"
+            "其中 Ours (Full) 取自主表 seed 9（SSL 损失权重 0.20），"
+            "其他消融变体由对应 checkpoint 重新评分。"
             "FlowGraph 存在满分天花板，因此可能出现并列最佳。",
             r"\end{minipage}",
             r"\end{table*}",
