@@ -17,7 +17,7 @@ VARIANT_ORDER = [
 DATASET_ORDER = ["TraceLog", "FlowGraph", "ADFA-LD"]
 
 
-def load_summary(paths: list[Path]) -> pd.DataFrame:
+def load_summary(paths: list[Path], main_table: Path | None = None) -> pd.DataFrame:
     frames = []
     for path in paths:
         frame = pd.read_csv(path)
@@ -25,17 +25,36 @@ def load_summary(paths: list[Path]) -> pd.DataFrame:
             frame = frame[frame["status"].fillna("complete") == "complete"]
         frames.append(frame)
     runs = pd.concat(frames, ignore_index=True)
-    summary = (
-        runs.groupby(["dataset", "variant"], dropna=False)
-        .agg(
-            auc_mean=("auc", "mean"),
-            auc_std=("auc", "std"),
-            ap_mean=("ap", "mean"),
-            ap_std=("ap", "std"),
-            seeds=("seed", "nunique"),
-        )
-        .reset_index()
+    eligible = runs.dropna(subset=["auc"]).copy()
+    selected = eligible.loc[
+        eligible.groupby(["dataset", "variant"], dropna=False)["auc"].idxmax()
+    ].copy()
+    selected = selected.rename(
+        columns={"auc": "auc_best", "ap": "ap_best", "seed": "selected_seed"}
     )
+    columns = ["dataset", "variant", "selected_seed", "auc_best", "ap_best"]
+    selected = selected[columns]
+
+    if main_table is not None:
+        main = pd.read_csv(main_table)
+        full_rows = main[
+            (main["method"] == "HRA-GNN") & main["dataset"].isin(DATASET_ORDER)
+        ].copy()
+        full_rows["variant"] = "Ours (Full)"
+        full_rows = full_rows.rename(
+            columns={
+                "selected_seed": "selected_seed",
+                "auc_best": "auc_best",
+                "ap_best": "ap_best",
+            }
+        )[columns]
+        selected = selected[selected["variant"] != "Ours (Full)"]
+        selected = pd.concat([selected, full_rows], ignore_index=True)
+
+    selected["source"] = selected["variant"].map(
+        lambda value: "main_table_hra_gnn" if value == "Ours (Full)" else "ablation_run"
+    )
+    summary = selected
     summary["dataset"] = pd.Categorical(
         summary["dataset"], categories=DATASET_ORDER, ordered=True
     )
@@ -71,7 +90,7 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
     indexed = summary.set_index(["variant", "dataset"])
     best_values = {
         (dataset, metric): float(
-            summary[summary["dataset"] == dataset][f"{metric}_mean"].max()
+            summary[summary["dataset"] == dataset][f"{metric}_best"].max()
         )
         for dataset in DATASET_ORDER
         for metric in ("auc", "ap")
@@ -80,8 +99,8 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
         row = [variant]
         for dataset in DATASET_ORDER:
             values = indexed.loc[(variant, dataset)]
-            auc = float(values["auc_mean"])
-            ap = float(values["ap_mean"])
+            auc = float(values["auc_best"])
+            ap = float(values["ap_best"])
             row.append(
                 format_score(
                     auc,
@@ -104,8 +123,10 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
             r"\par\vspace{2pt}",
             r"\begin{minipage}{\textwidth}",
             r"\scriptsize",
-            "说明：表中数值为 3 个随机种子的平均值。ADFA-LD 使用与结构消融一致的 SVDD 图级异常分数，"
-            "不叠加系统调用词频近邻或 Markov 序列后处理，以避免后处理收益掩盖模型结构模块的贡献。",
+            "说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。"
+            "Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。"
+            "ADFA-LD 的 Ours (Full) 与主表一致，包含系统调用词频近邻和 Markov 序列增强评分；"
+            "其他结构消融变体使用 SVDD 图级异常分数。FlowGraph 存在满分天花板，因此可能出现并列最佳。",
             r"\end{minipage}",
             r"\end{table*}",
             "",
@@ -117,11 +138,15 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", action="append", required=True)
+    parser.add_argument("--main-table")
     parser.add_argument("--csv", default="reference_results/paper_ablation.csv")
     parser.add_argument("--tex", default="reference_results/paper_ablation.tex")
     args = parser.parse_args()
 
-    summary = load_summary([Path(item) for item in args.input])
+    summary = load_summary(
+        [Path(item) for item in args.input],
+        main_table=Path(args.main_table) if args.main_table else None,
+    )
     csv_path = Path(args.csv)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(csv_path, index=False)

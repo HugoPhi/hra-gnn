@@ -1,0 +1,41 @@
+% 需要 \usepackage{booktabs,graphicx,multirow}
+\begin{table*}[t]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{0.92}
+\setlength{\tabcolsep}{4pt}
+\caption{去除 HDFS 后的图异常检测主表结果（最佳运行）}
+\label{tab:final_auroc_ap_results_no_hdfs}
+\begin{tabular}{lcccccc}
+\toprule
+\multicolumn{1}{c}{\multirow{2}{*}{方法名称}} & \multicolumn{2}{c}{TraceLog} & \multicolumn{2}{c}{FlowGraph} & \multicolumn{2}{c}{ADFA-LD} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & AUROC & AP & AUROC & AP & AUROC & AP \\
+\midrule
+DeepTraLog & 0.6660 & 0.5835 & \textbf{1.0000} & \textbf{1.0000} & 0.7631 & 0.6963 \\
+\addlinespace
+GLocalKD & 0.6863 & 0.6316 & 0.9654 & 0.9766 & 0.7236 & 0.6821 \\
+\addlinespace
+HGT & 0.7243 & 0.6289 & 0.8060 & 0.6074 & 0.8253 & 0.7679 \\
+\addlinespace
+OCHetGCN & 0.7481 & 0.6578 & \textbf{1.0000} & \textbf{1.0000} & 0.8081 & 0.7651 \\
+\addlinespace
+SIGNET & 0.4924 & 0.5455 & 0.6777 & 0.5592 & 0.6367 & 0.5904 \\
+\addlinespace
+CVTGAD & 0.6308 & 0.6886 & 0.8496 & 0.9055 & 0.6696 & 0.6033 \\
+\addlinespace
+MUSE & 0.5508 & 0.5950 & -- & -- & 0.6737 & 0.5807 \\
+\addlinespace
+GLADMamba & 0.6746 & \underline{0.7325} & \underline{0.9727} & \underline{0.9854} & 0.7146 & 0.6450 \\
+\addlinespace
+HRGCN & \underline{0.7884} & 0.7319 & \textbf{1.0000} & \textbf{1.0000} & \underline{0.8331} & \underline{0.7789} \\
+\addlinespace
+\textbf{HRA-GNN} & \textbf{0.8376} & \textbf{0.7778} & \textbf{1.0000} & \textbf{1.0000} & \textbf{0.8584} & \textbf{0.8475} \\
+\bottomrule
+\end{tabular}%
+\par\vspace{2pt}
+\begin{minipage}{\textwidth}
+\scriptsize
+说明：本表由四数据集主表删除 HDFS 列得到，所有数值与主表 CSV 完全同源。粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。
+\end{minipage}
+\end{table*}
