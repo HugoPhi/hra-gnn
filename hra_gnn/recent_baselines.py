@@ -55,6 +55,13 @@ def _splits(config: dict[str, Any], dataset) -> dict[str, list[int]]:
     )
 
 
+def _apply_dataset_metadata(config: dict[str, Any], dataset) -> None:
+    metadata = getattr(dataset, "metadata", {})
+    for key in ("feature_dim", "num_node_types", "num_edge_types"):
+        if key in metadata:
+            config["dataset"][key] = int(metadata[key])
+
+
 def _to_pyg_graphs(
     dataset, indices: list[int], *, rw_dim: int, dg_dim: int, mamba: bool
 ):
@@ -476,6 +483,7 @@ def run_native_graph_fair(
     seed_everything(seed)
     device = resolve_device(config["training"].get("device", "auto"))
     dataset = load_dataset(config["dataset"])
+    _apply_dataset_metadata(config, dataset)
     splits = _limited_splits(
         dataset,
         _splits(config, dataset),
@@ -689,6 +697,7 @@ def run_dual_view_fair(
     seed_everything(seed)
     device = resolve_device(config["training"].get("device", "auto"))
     dataset = load_dataset(config["dataset"])
+    _apply_dataset_metadata(config, dataset)
     dataset_splits = _splits(config, dataset)
     dataset_splits = _limited_splits(
         dataset,
@@ -950,6 +959,7 @@ def run_signet_fair(
     seed_everything(seed)
     device = resolve_device(config["training"].get("device", "auto"))
     dataset = load_dataset(config["dataset"])
+    _apply_dataset_metadata(config, dataset)
     dataset_splits = _limited_splits(
         dataset,
         _splits(config, dataset),
@@ -1163,6 +1173,7 @@ def run_muse_fair(
     seed_everything(seed)
     device = resolve_device(config["training"].get("device", "auto"))
     dataset = load_dataset(config["dataset"])
+    _apply_dataset_metadata(config, dataset)
     splits = _limited_splits(
         dataset,
         _splits(config, dataset),
