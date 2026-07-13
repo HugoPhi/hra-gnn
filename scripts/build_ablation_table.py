@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pandas as pd
+
+
+VARIANT_ORDER = [
+    "Static Concat",
+    "Dynamic Attention",
+    "Only Max-Pooling",
+    "Only Mean-Pooling",
+    "w/o SSL",
+    "Ours (Full)",
+]
+DATASET_ORDER = ["TraceLog", "FlowGraph", "ADFA-LD"]
+
+
+def load_summary(paths: list[Path]) -> pd.DataFrame:
+    frames = []
+    for path in paths:
+        frame = pd.read_csv(path)
+        frame = frame[frame.get("status", "complete") == "complete"]
+        frames.append(frame)
+    runs = pd.concat(frames, ignore_index=True)
+    summary = (
+        runs.groupby(["dataset", "variant"], dropna=False)
+        .agg(
+            auc_mean=("auc", "mean"),
+            auc_std=("auc", "std"),
+            ap_mean=("ap", "mean"),
+            ap_std=("ap", "std"),
+            seeds=("seed", "nunique"),
+        )
+        .reset_index()
+    )
+    summary["dataset"] = pd.Categorical(
+        summary["dataset"], categories=DATASET_ORDER, ordered=True
+    )
+    summary["variant"] = pd.Categorical(
+        summary["variant"], categories=VARIANT_ORDER, ordered=True
+    )
+    return summary.sort_values(["variant", "dataset"]).reset_index(drop=True)
+
+
+def format_score(value: float, *, bold: bool = False) -> str:
+    formatted = f"{value:.4f}"
+    return rf"\textbf{{{formatted}}}" if bold else formatted
+
+
+def write_tex(summary: pd.DataFrame, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        r"% 需要 \usepackage{booktabs,graphicx}",
+        r"\begin{table*}[t]",
+        r"\centering",
+        r"\scriptsize",
+        r"\renewcommand{\arraystretch}{0.94}",
+        r"\setlength{\tabcolsep}{4pt}",
+        r"\caption{消融实验性能对比}",
+        r"\label{tab:ablation_results}",
+        r"\begin{tabular}{lcccccc}",
+        r"\toprule",
+        r"\multirow{2}{*}{模型变体} & \multicolumn{2}{c}{TraceLog} & \multicolumn{2}{c}{FlowGraph} & \multicolumn{2}{c}{ADFA-LD} \\",
+        r"\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}",
+        r" & AUROC & AP & AUROC & AP & AUROC & AP \\",
+        r"\midrule",
+    ]
+    indexed = summary.set_index(["variant", "dataset"])
+    for variant in VARIANT_ORDER:
+        row = [variant]
+        for dataset in DATASET_ORDER:
+            values = indexed.loc[(variant, dataset)]
+            bold = variant == "Ours (Full)"
+            row.append(format_score(float(values["auc_mean"]), bold=bold))
+            row.append(format_score(float(values["ap_mean"]), bold=bold))
+        lines.append(" & ".join(row) + r" \\")
+        if variant == "w/o SSL":
+            lines.append(r"\midrule")
+    lines.extend(
+        [
+            r"\bottomrule",
+            r"\end{tabular}%",
+            r"\par\vspace{2pt}",
+            r"\begin{minipage}{\textwidth}",
+            r"\scriptsize",
+            "说明：表中数值为 3 个随机种子的平均值。ADFA-LD 使用与结构消融一致的 SVDD 图级异常分数，"
+            "不叠加系统调用词频近邻或 Markov 序列后处理，以避免后处理收益掩盖模型结构模块的贡献。",
+            r"\end{minipage}",
+            r"\end{table*}",
+            "",
+        ]
+    )
+    output.write_text("\n".join(lines), encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", action="append", required=True)
+    parser.add_argument("--csv", default="reference_results/paper_ablation.csv")
+    parser.add_argument("--tex", default="reference_results/paper_ablation.tex")
+    args = parser.parse_args()
+
+    summary = load_summary([Path(item) for item in args.input])
+    csv_path = Path(args.csv)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(csv_path, index=False)
+    write_tex(summary, Path(args.tex))
+    print(summary.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

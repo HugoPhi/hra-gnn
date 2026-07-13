@@ -19,6 +19,7 @@ IMAGE_DIR = ROOT / "doc" / "assets" / "tables"
 # fails when a new .tex file is added without being included in the build.
 TABLE_SOURCES = (
     "final_paper_auroc_ap_best",
+    "paper_ablation",
     "main_table_first_all_models_best",
     "main_table_first_recent_best",
     "direct_baselines_diagnostic",

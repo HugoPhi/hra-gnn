@@ -1,0 +1,50 @@
+name: ablation_flowgraph_refresh
+base_config: ../flowgraph.yaml
+results_root: artifacts/results/ablation_refresh
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: ablation_refresh
+  training:
+    epochs: 15
+    early_stopping_patience: 4
+  evaluation:
+    sampling: seeded_stratified
+
+variants:
+  Static Concat:
+    model:
+      architecture: hra
+      relation_fusion: static_concat
+      readout: hybrid
+  Dynamic Attention:
+    model:
+      architecture: hra
+      relation_fusion: semantic_attention
+      readout: hybrid
+  Only Max-Pooling:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: max
+  Only Mean-Pooling:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: mean
+  w/o SSL:
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
+    ssl:
+      enabled: false
+    evaluation:
+      score_mode: svdd
+      score_ssl_weight: 0.0
+  Ours (Full):
+    model:
+      architecture: hra
+      relation_fusion: deviation_attention
+      readout: hybrid
