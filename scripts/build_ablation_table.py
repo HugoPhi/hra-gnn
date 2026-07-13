@@ -17,7 +17,11 @@ VARIANT_ORDER = [
 DATASET_ORDER = ["TraceLog", "FlowGraph", "ADFA-LD"]
 
 
-def load_summary(paths: list[Path], main_table: Path | None = None) -> pd.DataFrame:
+def load_summary(
+    paths: list[Path],
+    main_table: Path | None = None,
+    adfa_hybrid_rescore: Path | None = None,
+) -> pd.DataFrame:
     frames = []
     for path in paths:
         frame = pd.read_csv(path)
@@ -35,6 +39,23 @@ def load_summary(paths: list[Path], main_table: Path | None = None) -> pd.DataFr
     columns = ["dataset", "variant", "selected_seed", "auc_best", "ap_best"]
     selected = selected[columns]
 
+    if adfa_hybrid_rescore is not None:
+        hybrid = pd.read_csv(adfa_hybrid_rescore)
+        hybrid = hybrid[hybrid["variant"] != "Ours (Full)"].copy()
+        hybrid_selected = hybrid.loc[
+            hybrid.groupby(["dataset", "variant"], dropna=False)["auc"].idxmax()
+        ].copy()
+        hybrid_selected = hybrid_selected.rename(
+            columns={"auc": "auc_best", "ap": "ap_best", "seed": "selected_seed"}
+        )[columns]
+        selected = selected[
+            ~(
+                (selected["dataset"] == "ADFA-LD")
+                & (selected["variant"] != "Ours (Full)")
+            )
+        ]
+        selected = pd.concat([selected, hybrid_selected], ignore_index=True)
+
     if main_table is not None:
         main = pd.read_csv(main_table)
         full_rows = main[
@@ -51,8 +72,17 @@ def load_summary(paths: list[Path], main_table: Path | None = None) -> pd.DataFr
         selected = selected[selected["variant"] != "Ours (Full)"]
         selected = pd.concat([selected, full_rows], ignore_index=True)
 
-    selected["source"] = selected["variant"].map(
-        lambda value: "main_table_hra_gnn" if value == "Ours (Full)" else "ablation_run"
+    selected["source"] = selected.apply(
+        lambda row: (
+            "main_table_hra_gnn"
+            if row["variant"] == "Ours (Full)"
+            else (
+                "adfa_hybrid_rescore"
+                if row["dataset"] == "ADFA-LD" and adfa_hybrid_rescore is not None
+                else "ablation_run"
+            )
+        ),
+        axis=1,
     )
     summary = selected
     summary["dataset"] = pd.Categorical(
@@ -125,8 +155,10 @@ def write_tex(summary: pd.DataFrame, output: Path) -> None:
             r"\scriptsize",
             "说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。"
             "Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。"
-            "ADFA-LD 的 Ours (Full) 与主表一致，包含系统调用词频近邻和 Markov 序列增强评分；"
-            "其他结构消融变体使用 SVDD 图级异常分数。FlowGraph 存在满分天花板，因此可能出现并列最佳。",
+            "ADFA-LD 列统一采用固定 ADFA-LD-1000 测试子集和由正常训练集拟合的 "
+            "SVDD、系统调用词频近邻、三阶 Markov 序列混合评分；"
+            "其中 Ours (Full) 取自主表 seed 9，其他消融变体由对应 checkpoint 重新评分。"
+            "FlowGraph 存在满分天花板，因此可能出现并列最佳。",
             r"\end{minipage}",
             r"\end{table*}",
             "",
@@ -139,6 +171,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", action="append", required=True)
     parser.add_argument("--main-table")
+    parser.add_argument("--adfa-hybrid-rescore")
     parser.add_argument("--csv", default="reference_results/paper_ablation.csv")
     parser.add_argument("--tex", default="reference_results/paper_ablation.tex")
     args = parser.parse_args()
@@ -146,6 +179,9 @@ def main() -> None:
     summary = load_summary(
         [Path(item) for item in args.input],
         main_table=Path(args.main_table) if args.main_table else None,
+        adfa_hybrid_rescore=(
+            Path(args.adfa_hybrid_rescore) if args.adfa_hybrid_rescore else None
+        ),
     )
     csv_path = Path(args.csv)
     csv_path.parent.mkdir(parents=True, exist_ok=True)

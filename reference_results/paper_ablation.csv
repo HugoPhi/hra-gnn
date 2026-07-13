@@ -1,19 +1,19 @@
 dataset,variant,selected_seed,auc_best,ap_best,source
 TraceLog,Static Concat,22,0.8064838860214002,0.7358811234693551,ablation_run
 FlowGraph,Static Concat,22,0.9996,0.999494846398168,ablation_run
-ADFA-LD,Static Concat,33,0.8198378543448559,0.5145232748784812,ablation_run
+ADFA-LD,Static Concat,11,0.8544860000000001,0.8451671613327219,adfa_hybrid_rescore
 TraceLog,Dynamic Attention,11,0.8273707343745813,0.7678997807700809,ablation_run
 FlowGraph,Dynamic Attention,22,0.9864,0.9871443667530402,ablation_run
-ADFA-LD,Dynamic Attention,22,0.8071520202899759,0.4933335099299438,ablation_run
+ADFA-LD,Dynamic Attention,22,0.83865,0.8290623633066285,adfa_hybrid_rescore
 TraceLog,Only Max-Pooling,22,0.7505670278127522,0.6663748501590411,ablation_run
 FlowGraph,Only Max-Pooling,33,1.0,1.0,ablation_run
-ADFA-LD,Only Max-Pooling,33,0.81463658573079,0.5238006078181717,ablation_run
+ADFA-LD,Only Max-Pooling,33,0.84677,0.8491461434437726,adfa_hybrid_rescore
 TraceLog,Only Mean-Pooling,22,0.6881874754614897,0.6100629589600862,ablation_run
 FlowGraph,Only Mean-Pooling,11,0.99288,0.9924854732128128,ablation_run
-ADFA-LD,Only Mean-Pooling,22,0.8070542128926705,0.4588927447918069,ablation_run
+ADFA-LD,Only Mean-Pooling,22,0.855784,0.8182891933344185,adfa_hybrid_rescore
 TraceLog,w/o SSL,22,0.802262916892193,0.7118713271651892,ablation_run
 FlowGraph,w/o SSL,33,0.9996,0.999494846398168,ablation_run
-ADFA-LD,w/o SSL,11,0.7968184694706014,0.5043654101285504,ablation_run
+ADFA-LD,w/o SSL,22,0.8264,0.8222615276000619,adfa_hybrid_rescore
 TraceLog,Ours (Full),22,0.8375594139326518,0.7777591369711399,main_table_hra_gnn
 FlowGraph,Ours (Full),10,1.0,1.0,main_table_hra_gnn
 ADFA-LD,Ours (Full),9,0.8584479999999999,0.8475272379868943,main_table_hra_gnn

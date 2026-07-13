@@ -12,18 +12,18 @@
 \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
  & AUROC & AP & AUROC & AP & AUROC & AP \\
 \midrule
-Static Concat & 0.8065 & 0.7359 & 0.9996 & 0.9995 & 0.8198 & 0.5145 \\
-Dynamic Attention & 0.8274 & 0.7679 & 0.9864 & 0.9871 & 0.8072 & 0.4933 \\
-Only Max-Pooling & 0.7506 & 0.6664 & \textbf{1.0000} & \textbf{1.0000} & 0.8146 & 0.5238 \\
-Only Mean-Pooling & 0.6882 & 0.6101 & 0.9929 & 0.9925 & 0.8071 & 0.4589 \\
-w/o SSL & 0.8023 & 0.7119 & 0.9996 & 0.9995 & 0.7968 & 0.5044 \\
+Static Concat & 0.8065 & 0.7359 & 0.9996 & 0.9995 & 0.8545 & 0.8452 \\
+Dynamic Attention & 0.8274 & 0.7679 & 0.9864 & 0.9871 & 0.8387 & 0.8291 \\
+Only Max-Pooling & 0.7506 & 0.6664 & \textbf{1.0000} & \textbf{1.0000} & 0.8468 & \textbf{0.8491} \\
+Only Mean-Pooling & 0.6882 & 0.6101 & 0.9929 & 0.9925 & 0.8558 & 0.8183 \\
+w/o SSL & 0.8023 & 0.7119 & 0.9996 & 0.9995 & 0.8264 & 0.8223 \\
 \midrule
-Ours (Full) & \textbf{0.8376} & \textbf{0.7778} & \textbf{1.0000} & \textbf{1.0000} & \textbf{0.8584} & \textbf{0.8475} \\
+Ours (Full) & \textbf{0.8376} & \textbf{0.7778} & \textbf{1.0000} & \textbf{1.0000} & \textbf{0.8584} & 0.8475 \\
 \bottomrule
 \end{tabular}%
 \par\vspace{2pt}
 \begin{minipage}{\textwidth}
 \scriptsize
-说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。ADFA-LD 的 Ours (Full) 与主表一致，包含系统调用词频近邻和 Markov 序列增强评分；其他结构消融变体使用 SVDD 图级异常分数。FlowGraph 存在满分天花板，因此可能出现并列最佳。
+说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。ADFA-LD 列统一采用固定 ADFA-LD-1000 测试子集和由正常训练集拟合的 SVDD、系统调用词频近邻、三阶 Markov 序列混合评分；其中 Ours (Full) 取自主表 seed 9，其他消融变体由对应 checkpoint 重新评分。FlowGraph 存在满分天花板，因此可能出现并列最佳。
 \end{minipage}
 \end{table*}
