@@ -80,8 +80,9 @@ def fmt(value: float, digits: int = 3) -> str:
 def fmt_delta(value: float) -> str:
     if pd.isna(value):
         return "--"
+    value = float(value)
     sign = "+" if float(value) >= 0 else ""
-    return f"{sign}{fmt(value, 4)}"
+    return f"{sign}{fmt(value, 2)}\\%"
 
 
 def write_plan_table(output: Path) -> None:
@@ -260,14 +261,14 @@ def add_no_ssl_deltas(frame: pd.DataFrame) -> pd.DataFrame:
         baseline = group[group["variant"] == "no_ssl"]
         if baseline.empty:
             group = group.copy()
-            group["delta_auc"] = pd.NA
-            group["delta_ap"] = pd.NA
+            group["delta_auc_pct"] = pd.NA
+            group["delta_ap_pct"] = pd.NA
         else:
             auc0 = float(baseline.iloc[0]["auc_best"])
             ap0 = float(baseline.iloc[0]["ap_best"])
             group = group.copy()
-            group["delta_auc"] = group["auc_best"].astype(float) - auc0
-            group["delta_ap"] = group["ap_best"].astype(float) - ap0
+            group["delta_auc_pct"] = (group["auc_best"].astype(float) - auc0) * 100.0
+            group["delta_ap_pct"] = (group["ap_best"].astype(float) - ap0) * 100.0
         rows.append(group)
     return pd.concat(rows, ignore_index=True)
 
@@ -305,7 +306,7 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
         r"\label{tab:ssl_augmentation_effects}",
         r"\begin{tabular}{llrrrr}",
         r"\toprule",
-        r"数据集 & 变体 & AUROC$_{\max}$ & AP$_{\max}$ & $\Delta$AUROC & $\Delta$AP \\",
+        r"数据集 & 变体 & AUROC$_{\max}$ & AP$_{\max}$ & $\Delta$AUROC(\%) & $\Delta$AP(\%) \\",
         r"\midrule",
     ]
     for dataset in RESULT_DATASETS:
@@ -324,8 +325,8 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
                         variant,
                         fmt(row["auc_best"], 4),
                         fmt(row["ap_best"], 4),
-                        fmt_delta(row["delta_auc"]),
-                        fmt_delta(row["delta_ap"]),
+                        fmt_delta(row["delta_auc_pct"]),
+                        fmt_delta(row["delta_ap_pct"]),
                     ]
                 )
                 + r" \\"
@@ -341,7 +342,7 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
             r"\par\vspace{2pt}",
             r"\begin{minipage}{\textwidth}",
             r"\scriptsize",
-            r"说明：$\Delta$AUROC 和 $\Delta$AP 均以同一数据集上的 no\_ssl 为参照。"
+            r"说明：$\Delta$AUROC 和 $\Delta$AP 均以同一数据集上的 no\_ssl 为参照，单位为百分点。"
             r"表中各变体按该变体已完成运行的最大 AUROC/AP 报告；"
             r"all\_four 行直接采用主表 HRA-GNN 最佳运行，以保证完整方法口径与主表一致。",
             r"\end{minipage}",
