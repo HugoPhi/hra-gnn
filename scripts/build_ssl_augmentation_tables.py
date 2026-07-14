@@ -48,9 +48,44 @@ PLAN_ROWS = [
     ),
 ]
 
+RESULT_DATASETS = ["TraceLog", "FlowGraph", "ADFA-LD"]
+RESULT_VARIANTS = [
+    "no_ssl",
+    "edge_perturbation",
+    "edge_addition",
+    "node_type_swap",
+    "edge_type_swap",
+    "topology_only",
+    "type_only",
+    "full",
+    "all_four_diagnostic",
+]
+RESULT_VARIANT_LABELS = {
+    "no_ssl": r"no\_ssl",
+    "edge_perturbation": r"edge\_perturbation",
+    "edge_addition": r"edge\_addition",
+    "node_type_swap": r"node\_type\_swap",
+    "edge_type_swap": r"edge\_type\_swap",
+    "topology_only": r"topology\_only",
+    "type_only": r"type\_only",
+    "full": r"full",
+    "all_four_diagnostic": r"all\_four\_diagnostic",
+}
+
 
 def fmt(value: float, digits: int = 3) -> str:
     return f"{float(value):.{digits}f}"
+
+
+def fmt_pm(mean: float, std: float) -> str:
+    return rf"{fmt(mean)}$\pm${fmt(std)}"
+
+
+def fmt_delta(value: float) -> str:
+    if pd.isna(value):
+        return "--"
+    sign = "+" if float(value) >= 0 else ""
+    return f"{sign}{fmt(value)}"
 
 
 def write_plan_table(output: Path) -> None:
@@ -142,6 +177,127 @@ def write_audit_table(summary_path: Path, output: Path) -> None:
     output.write_text("\n".join(lines), encoding="utf-8")
 
 
+def load_ssl_result_summaries(result_root: Path) -> pd.DataFrame:
+    paths = {
+        "TraceLog": result_root
+        / "ssl_augmentation_tracelog"
+        / "variant_summary.csv",
+        "FlowGraph": result_root
+        / "ssl_augmentation_flowgraph"
+        / "variant_summary.csv",
+        "ADFA-LD": result_root
+        / "ssl_augmentation_adfa_ld"
+        / "hybrid_rescore_variant_summary.csv",
+    }
+    frames = []
+    for dataset, path in paths.items():
+        if not path.exists():
+            continue
+        frame = pd.read_csv(path)
+        frame["dataset"] = dataset
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    required = {"dataset", "variant", "auc_mean", "auc_std", "ap_mean", "ap_std"}
+    missing = required - set(combined.columns)
+    if missing:
+        raise ValueError(f"Missing columns in SSL result summaries: {sorted(missing)}")
+    return combined
+
+
+def add_no_ssl_deltas(frame: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for dataset, group in frame.groupby("dataset", sort=False):
+        baseline = group[group["variant"] == "no_ssl"]
+        if baseline.empty:
+            group = group.copy()
+            group["delta_auc"] = pd.NA
+            group["delta_ap"] = pd.NA
+        else:
+            auc0 = float(baseline.iloc[0]["auc_mean"])
+            ap0 = float(baseline.iloc[0]["ap_mean"])
+            group = group.copy()
+            group["delta_auc"] = group["auc_mean"].astype(float) - auc0
+            group["delta_ap"] = group["ap_mean"].astype(float) - ap0
+        rows.append(group)
+    return pd.concat(rows, ignore_index=True)
+
+
+def write_effect_table(result_root: Path, output: Path) -> bool:
+    frame = load_ssl_result_summaries(result_root)
+    if frame.empty:
+        return False
+    frame = add_no_ssl_deltas(frame)
+    frame.drop(columns=[column for column in frame.columns if column.startswith("_")], errors="ignore").to_csv(
+        output.with_suffix(".csv"), index=False
+    )
+    frame["_dataset_order"] = frame["dataset"].map(
+        {name: index for index, name in enumerate(RESULT_DATASETS)}
+    )
+    frame["_variant_order"] = frame["variant"].map(
+        {name: index for index, name in enumerate(RESULT_VARIANTS)}
+    )
+    frame = frame.sort_values(["_dataset_order", "_variant_order", "variant"])
+
+    lines = [
+        r"% 需要 \usepackage{booktabs,multirow}",
+        r"\begin{table*}[t]",
+        r"\centering",
+        r"\scriptsize",
+        r"\renewcommand{\arraystretch}{0.98}",
+        r"\setlength{\tabcolsep}{4pt}",
+        r"\caption{不同自监督增强策略的独立作用}",
+        r"\label{tab:ssl_augmentation_effects}",
+        r"\begin{tabular}{llrrrr}",
+        r"\toprule",
+        r"数据集 & 变体 & AUROC & AP & $\Delta$AUROC & $\Delta$AP \\",
+        r"\midrule",
+    ]
+    for dataset in RESULT_DATASETS:
+        subset = frame[frame["dataset"] == dataset]
+        if subset.empty:
+            continue
+        first = True
+        for _, row in subset.iterrows():
+            dataset_cell = rf"\multirow{{{len(subset)}}}{{*}}{{{dataset}}}" if first else ""
+            first = False
+            variant = RESULT_VARIANT_LABELS.get(row["variant"], str(row["variant"]).replace("_", r"\_"))
+            lines.append(
+                " & ".join(
+                    [
+                        dataset_cell,
+                        variant,
+                        fmt_pm(row["auc_mean"], row["auc_std"]),
+                        fmt_pm(row["ap_mean"], row["ap_std"]),
+                        fmt_delta(row["delta_auc"]),
+                        fmt_delta(row["delta_ap"]),
+                    ]
+                )
+                + r" \\"
+            )
+        lines.append(r"\midrule")
+    if lines[-1] == r"\midrule":
+        lines[-1] = r"\bottomrule"
+    else:
+        lines.append(r"\bottomrule")
+    lines.extend(
+        [
+            r"\end{tabular}%",
+            r"\par\vspace{2pt}",
+            r"\begin{minipage}{\textwidth}",
+            r"\scriptsize",
+            r"说明：$\Delta$AUROC 和 $\Delta$AP 均以同一数据集上的 no\_ssl 为参照。"
+            r"表中结果用于回答自监督增强策略的独立贡献，故报告 3 个随机种子的均值与标准差。",
+            r"\end{minipage}",
+            r"\end{table*}",
+            "",
+        ]
+    )
+    output.write_text("\n".join(lines), encoding="utf-8")
+    return True
+
+
 def main() -> None:
     output_dir = Path("reference_results")
     write_plan_table(output_dir / "ssl_augmentation_experiment_plan.tex")
@@ -149,7 +305,14 @@ def main() -> None:
         output_dir / "ssl_augmentation_audit_summary.csv",
         output_dir / "ssl_augmentation_audit_summary.tex",
     )
-    print("Wrote SSL augmentation plan and audit tables")
+    wrote_effects = write_effect_table(
+        output_dir / "ssl_augmentation_server",
+        output_dir / "ssl_augmentation_effect_results.tex",
+    )
+    message = "Wrote SSL augmentation plan and audit tables"
+    if wrote_effects:
+        message += ", plus effect result table"
+    print(message)
 
 
 if __name__ == "__main__":

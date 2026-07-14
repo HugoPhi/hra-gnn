@@ -23,6 +23,7 @@ TABLE_SOURCES = (
     "paper_ablation",
     "ssl_augmentation_experiment_plan",
     "ssl_augmentation_audit_summary",
+    "ssl_augmentation_effect_results",
     "main_table_first_all_models_best",
     "main_table_first_recent_best",
     "direct_baselines_diagnostic",
