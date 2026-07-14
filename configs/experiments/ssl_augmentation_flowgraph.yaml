@@ -1,0 +1,50 @@
+name: ssl_augmentation_flowgraph
+base_config: ../flowgraph.yaml
+results_root: artifacts/results/expert_revision
+seeds: [11, 22, 33]
+
+common:
+  experiment:
+    stage: expert_ssl_augmentation_independent_effects
+  training:
+    epochs: 15
+    batch_size: 4
+    early_stopping_patience: 4
+  evaluation:
+    sampling: seeded_stratified
+  model:
+    architecture: hra
+    relation_fusion: deviation_attention
+    readout: hybrid
+
+variants:
+  no_ssl:
+    ssl:
+      enabled: false
+    evaluation:
+      score_mode: svdd
+      score_ssl_weight: 0.0
+  edge_perturbation:
+    augmentation:
+      methods: [edge_perturbation]
+  edge_addition:
+    augmentation:
+      methods: [edge_addition]
+  node_type_swap:
+    augmentation:
+      methods: [node_type_swap]
+  edge_type_swap:
+    augmentation:
+      methods: [edge_type_swap]
+  topology_only:
+    augmentation:
+      methods: [edge_perturbation, edge_addition]
+  type_only:
+    augmentation:
+      methods: [node_type_swap, edge_type_swap]
+  full:
+    augmentation:
+      methods: [edge_addition, node_type_swap]
+  all_four_diagnostic:
+    augmentation:
+      methods: [edge_perturbation, edge_addition, node_type_swap, edge_type_swap]

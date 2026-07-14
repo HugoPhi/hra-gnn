@@ -1,0 +1,22 @@
+% 需要 \usepackage{booktabs,tabularx}
+\begin{table*}[t]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.05}
+\caption{自监督增强策略独立作用实验设计}
+\label{tab:ssl_augmentation_plan}
+\begin{tabularx}{\textwidth}{lllX}
+\toprule
+编号 & 变体 & 增强策略 & 回答的问题 \\
+\midrule
+1 & no\_ssl & 关闭 SSL & 衡量没有增强分支时的单类 SVDD 基线。 \\
+2 & edge\_perturbation & 仅边扰动 & 检验局部拓扑重连是否提升对关系稀释和异常邻域的敏感性。 \\
+3 & edge\_addition & 仅边添加 & 检验额外正常模式边是否提升对冗余/伪连接异常的鲁棒性。 \\
+4 & node\_type\_swap & 仅节点类型交换 & 检验节点语义错配是否有助于学习类型一致性边界。 \\
+5 & edge\_type\_swap & 仅边类型交换 & 检验关系语义错配是否有助于学习边类型一致性边界。 \\
+6 & topology\_only & 边扰动+边添加 & 汇总结构增强贡献，并与 type\_only 区分。 \\
+7 & type\_only & 节点类型交换+边类型交换 & 汇总语义增强贡献，并与 topology\_only 区分。 \\
+8 & full & 数据集默认完整增强 & 检验论文最终配置是否优于单一增强和组合增强。 \\
+\bottomrule
+\end{tabularx}
+\end{table*}

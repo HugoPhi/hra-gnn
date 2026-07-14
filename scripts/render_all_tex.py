@@ -21,6 +21,8 @@ TABLE_SOURCES = (
     "final_paper_auroc_ap_best",
     "final_paper_auroc_ap_best_no_hdfs",
     "paper_ablation",
+    "ssl_augmentation_experiment_plan",
+    "ssl_augmentation_audit_summary",
     "main_table_first_all_models_best",
     "main_table_first_recent_best",
     "direct_baselines_diagnostic",

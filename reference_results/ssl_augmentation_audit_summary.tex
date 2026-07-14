@@ -1,0 +1,34 @@
+% 需要 \usepackage{booktabs}
+\begin{table*}[t]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{0.98}
+\setlength{\tabcolsep}{4pt}
+\caption{自监督增强有效性审计（200 图抽样）}
+\label{tab:ssl_augmentation_audit}
+\begin{tabular}{llrrrrrr}
+\toprule
+数据集 & 增强策略 & 改变图比例 & 边数变化 & 边Jaccard & 节点类型变化 & 边类型变化 & Schema合法率 \\
+\midrule
+ADFA-LD & edge\_perturbation & 1.000 & 0.0 & 0.829 & 0.000 & 0.000 & 1.000 \\
+ADFA-LD & edge\_addition & 1.000 & 132.1 & 0.912 & 0.000 & 0.000 & 1.000 \\
+ADFA-LD & node\_type\_swap & 0.005 & 0.0 & 1.000 & 0.000 & 0.000 & 1.000 \\
+ADFA-LD & edge\_type\_swap & 0.095 & 0.0 & 0.994 & 0.000 & 0.006 & 1.000 \\
+\midrule
+FlowGraph & edge\_perturbation & 1.000 & 0.0 & 0.849 & 0.000 & 0.000 & 1.000 \\
+FlowGraph & edge\_addition & 1.000 & 5105.5 & 0.747 & 0.000 & 0.000 & 1.000 \\
+FlowGraph & node\_type\_swap & 0.000 & 0.0 & 1.000 & 0.000 & 0.000 & 1.000 \\
+FlowGraph & edge\_type\_swap & 0.000 & 0.0 & 1.000 & 0.000 & 0.000 & 1.000 \\
+\midrule
+TraceLog & edge\_perturbation & 0.890 & 0.0 & 0.811 & 0.000 & 0.000 & 1.000 \\
+TraceLog & edge\_addition & 1.000 & 28.0 & 0.899 & 0.000 & 0.000 & 1.000 \\
+TraceLog & node\_type\_swap & 0.065 & 0.0 & 1.000 & 0.004 & 0.000 & 1.000 \\
+TraceLog & edge\_type\_swap & 0.000 & 0.0 & 1.000 & 0.000 & 0.000 & 1.000 \\
+\bottomrule
+\end{tabular}%
+\par\vspace{2pt}
+\begin{minipage}{\textwidth}
+\scriptsize
+说明：审计只执行增强变换，不训练模型。改变图比例表示增强后边索引、边类型或节点类型至少一项发生变化；边 Jaccard 越低表示结构改动越强。Schema 合法率按增强后关系是否仍属于原图已观察关系集合计算。
+\end{minipage}
+\end{table*}
