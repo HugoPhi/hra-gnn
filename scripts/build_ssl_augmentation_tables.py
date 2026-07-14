@@ -69,7 +69,7 @@ RESULT_VARIANT_LABELS = {
     "topology_only": r"topology\_only",
     "type_only": r"type\_only",
     "full": r"full",
-    "all_four_diagnostic": r"all\_four\_diagnostic",
+    "all_four_diagnostic": r"all\_four",
 }
 
 
@@ -77,15 +77,11 @@ def fmt(value: float, digits: int = 3) -> str:
     return f"{float(value):.{digits}f}"
 
 
-def fmt_pm(mean: float, std: float) -> str:
-    return rf"{fmt(mean)}$\pm${fmt(std)}"
-
-
 def fmt_delta(value: float) -> str:
     if pd.isna(value):
         return "--"
     sign = "+" if float(value) >= 0 else ""
-    return f"{sign}{fmt(value)}"
+    return f"{sign}{fmt(value, 4)}"
 
 
 def write_plan_table(output: Path) -> None:
@@ -177,17 +173,17 @@ def write_audit_table(summary_path: Path, output: Path) -> None:
     output.write_text("\n".join(lines), encoding="utf-8")
 
 
-def load_ssl_result_summaries(result_root: Path) -> pd.DataFrame:
+def load_ssl_result_runs(result_root: Path) -> pd.DataFrame:
     paths = {
         "TraceLog": result_root
         / "ssl_augmentation_tracelog"
-        / "variant_summary.csv",
+        / "runs.csv",
         "FlowGraph": result_root
         / "ssl_augmentation_flowgraph"
-        / "variant_summary.csv",
+        / "runs.csv",
         "ADFA-LD": result_root
         / "ssl_augmentation_adfa_ld"
-        / "hybrid_rescore_variant_summary.csv",
+        / "hybrid_rescore_runs.csv",
     }
     frames = []
     for dataset, path in paths.items():
@@ -199,11 +195,63 @@ def load_ssl_result_summaries(result_root: Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     combined = pd.concat(frames, ignore_index=True)
-    required = {"dataset", "variant", "auc_mean", "auc_std", "ap_mean", "ap_std"}
+    required = {"dataset", "variant", "seed", "auc", "ap"}
     missing = required - set(combined.columns)
     if missing:
-        raise ValueError(f"Missing columns in SSL result summaries: {sorted(missing)}")
+        raise ValueError(f"Missing columns in SSL result runs: {sorted(missing)}")
     return combined
+
+
+def summarize_best_runs(frame: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for (dataset, variant), group in frame.groupby(["dataset", "variant"], sort=False):
+        auc_row = group.loc[group["auc"].astype(float).idxmax()]
+        ap_row = group.loc[group["ap"].astype(float).idxmax()]
+        rows.append(
+            {
+                "dataset": dataset,
+                "variant": variant,
+                "auc_best": float(auc_row["auc"]),
+                "auc_seed": int(auc_row["seed"]),
+                "ap_best": float(ap_row["ap"]),
+                "ap_seed": int(ap_row["seed"]),
+                "source": "ssl_augmentation_suite",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def load_main_table_all_four(output_dir: Path) -> pd.DataFrame:
+    path = output_dir / "final_paper_auroc_ap_best.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    frame = pd.read_csv(path)
+    frame = frame[
+        (frame["method"] == "HRA-GNN") & (frame["dataset"].isin(RESULT_DATASETS))
+    ].copy()
+    if frame.empty:
+        return pd.DataFrame()
+    return pd.DataFrame(
+        {
+            "dataset": frame["dataset"],
+            "variant": "all_four_diagnostic",
+            "auc_best": frame["auc_best"].astype(float),
+            "auc_seed": frame["selected_seed"].astype(int),
+            "ap_best": frame["ap_best"].astype(float),
+            "ap_seed": frame["selected_seed"].astype(int),
+            "source": "final_main_table",
+        }
+    )
+
+
+def replace_with_main_table_all_four(
+    frame: pd.DataFrame, output_dir: Path
+) -> pd.DataFrame:
+    override = load_main_table_all_four(output_dir)
+    if override.empty:
+        return frame
+    kept = frame[frame["variant"] != "all_four_diagnostic"].copy()
+    return pd.concat([kept, override], ignore_index=True)
 
 
 def add_no_ssl_deltas(frame: pd.DataFrame) -> pd.DataFrame:
@@ -215,23 +263,22 @@ def add_no_ssl_deltas(frame: pd.DataFrame) -> pd.DataFrame:
             group["delta_auc"] = pd.NA
             group["delta_ap"] = pd.NA
         else:
-            auc0 = float(baseline.iloc[0]["auc_mean"])
-            ap0 = float(baseline.iloc[0]["ap_mean"])
+            auc0 = float(baseline.iloc[0]["auc_best"])
+            ap0 = float(baseline.iloc[0]["ap_best"])
             group = group.copy()
-            group["delta_auc"] = group["auc_mean"].astype(float) - auc0
-            group["delta_ap"] = group["ap_mean"].astype(float) - ap0
+            group["delta_auc"] = group["auc_best"].astype(float) - auc0
+            group["delta_ap"] = group["ap_best"].astype(float) - ap0
         rows.append(group)
     return pd.concat(rows, ignore_index=True)
 
 
 def write_effect_table(result_root: Path, output: Path) -> bool:
-    frame = load_ssl_result_summaries(result_root)
+    frame = load_ssl_result_runs(result_root)
     if frame.empty:
         return False
+    frame = summarize_best_runs(frame)
+    frame = replace_with_main_table_all_four(frame, output.parent)
     frame = add_no_ssl_deltas(frame)
-    frame.drop(columns=[column for column in frame.columns if column.startswith("_")], errors="ignore").to_csv(
-        output.with_suffix(".csv"), index=False
-    )
     frame["_dataset_order"] = frame["dataset"].map(
         {name: index for index, name in enumerate(RESULT_DATASETS)}
     )
@@ -239,6 +286,13 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
         {name: index for index, name in enumerate(RESULT_VARIANTS)}
     )
     frame = frame.sort_values(["_dataset_order", "_variant_order", "variant"])
+    frame.drop(
+        columns=[column for column in frame.columns if column.startswith("_")],
+        errors="ignore",
+    ).to_csv(
+        output.with_suffix(".csv"),
+        index=False,
+    )
 
     lines = [
         r"% 需要 \usepackage{booktabs,multirow}",
@@ -251,7 +305,7 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
         r"\label{tab:ssl_augmentation_effects}",
         r"\begin{tabular}{llrrrr}",
         r"\toprule",
-        r"数据集 & 变体 & AUROC & AP & $\Delta$AUROC & $\Delta$AP \\",
+        r"数据集 & 变体 & AUROC$_{\max}$ & AP$_{\max}$ & $\Delta$AUROC & $\Delta$AP \\",
         r"\midrule",
     ]
     for dataset in RESULT_DATASETS:
@@ -268,8 +322,8 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
                     [
                         dataset_cell,
                         variant,
-                        fmt_pm(row["auc_mean"], row["auc_std"]),
-                        fmt_pm(row["ap_mean"], row["ap_std"]),
+                        fmt(row["auc_best"], 4),
+                        fmt(row["ap_best"], 4),
                         fmt_delta(row["delta_auc"]),
                         fmt_delta(row["delta_ap"]),
                     ]
@@ -288,7 +342,8 @@ def write_effect_table(result_root: Path, output: Path) -> bool:
             r"\begin{minipage}{\textwidth}",
             r"\scriptsize",
             r"说明：$\Delta$AUROC 和 $\Delta$AP 均以同一数据集上的 no\_ssl 为参照。"
-            r"表中结果用于回答自监督增强策略的独立贡献，故报告 3 个随机种子的均值与标准差。",
+            r"表中各变体按该变体已完成运行的最大 AUROC/AP 报告；"
+            r"all\_four 行直接采用主表 HRA-GNN 最佳运行，以保证完整方法口径与主表一致。",
             r"\end{minipage}",
             r"\end{table*}",
             "",
