@@ -1,0 +1,23 @@
+name: ssl_augmentation_flowgraph_type_only_seed_sweep
+base_config: ../flowgraph.yaml
+results_root: artifacts/results/expert_revision
+seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 44, 55, 66, 77, 88, 99]
+
+common:
+  experiment:
+    stage: expert_ssl_augmentation_type_only_seed_sweep
+  training:
+    epochs: 15
+    batch_size: 4
+    early_stopping_patience: 4
+  evaluation:
+    sampling: seeded_stratified
+  model:
+    architecture: hra
+    relation_fusion: deviation_attention
+    readout: hybrid
+
+variants:
+  type_only:
+    augmentation:
+      methods: [node_type_swap, edge_type_swap]

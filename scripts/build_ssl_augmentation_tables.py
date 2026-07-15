@@ -175,19 +175,28 @@ def write_audit_table(summary_path: Path, output: Path) -> None:
 
 
 def load_ssl_result_runs(result_root: Path) -> pd.DataFrame:
-    paths = {
-        "TraceLog": result_root
-        / "ssl_augmentation_tracelog"
-        / "runs.csv",
-        "FlowGraph": result_root
-        / "ssl_augmentation_flowgraph"
-        / "runs.csv",
-        "ADFA-LD": result_root
-        / "ssl_augmentation_adfa_ld"
-        / "hybrid_rescore_runs.csv",
-    }
+    paths = [
+        (
+            "TraceLog",
+            result_root / "ssl_augmentation_tracelog" / "runs.csv",
+        ),
+        (
+            "FlowGraph",
+            result_root / "ssl_augmentation_flowgraph" / "runs.csv",
+        ),
+        (
+            "FlowGraph",
+            result_root
+            / "ssl_augmentation_flowgraph_type_only_seed_sweep"
+            / "runs.csv",
+        ),
+        (
+            "ADFA-LD",
+            result_root / "ssl_augmentation_adfa_ld" / "hybrid_rescore_runs.csv",
+        ),
+    ]
     frames = []
-    for dataset, path in paths.items():
+    for dataset, path in paths:
         if not path.exists():
             continue
         frame = pd.read_csv(path)
