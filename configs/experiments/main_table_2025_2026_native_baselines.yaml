@@ -1,0 +1,39 @@
+name: main_table_2025_2026_native_baselines
+evidence_level: final_table_2025_2026_native_baseline
+results_root: artifacts/results/fair_matrix
+seeds: [11, 22, 33]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: dhagnn
+    overrides: &native_common
+      - training.epochs=30
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - recent_baseline.hidden_dim=64
+      - recent_baseline.output_dim=64
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=1000
+  - config: ../flowgraph.yaml
+    model: dhagnn
+    overrides: &native_flowgraph
+      - training.epochs=30
+      - training.batch_size=16
+      - evaluation.batch_size=16
+      - recent_baseline.hidden_dim=64
+      - recent_baseline.output_dim=64
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=128
+  - config: ../adfa_ld.yaml
+    model: dhagnn
+    overrides: *native_common
+
+  - config: ../tracelog.yaml
+    model: chigad
+    overrides: *native_common
+  - config: ../flowgraph.yaml
+    model: chigad
+    overrides: *native_flowgraph
+  - config: ../adfa_ld.yaml
+    model: chigad
+    overrides: *native_common

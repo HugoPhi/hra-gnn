@@ -4,7 +4,7 @@
 \scriptsize
 \renewcommand{\arraystretch}{0.92}
 \setlength{\tabcolsep}{4pt}
-\caption{去除 HDFS 后的图异常检测主表结果（最佳运行）}
+\caption{不同模型的性能对比（最佳运行）}
 \label{tab:final_auroc_ap_results_no_hdfs}
 \begin{tabular}{lcccccc}
 \toprule
@@ -20,13 +20,13 @@ HGT & 0.7243 & 0.6289 & 0.8060 & 0.6074 & 0.8253 & 0.7679 \\
 \addlinespace
 OCHetGCN & 0.7481 & 0.6578 & \textbf{1.0000} & \textbf{1.0000} & 0.8081 & 0.7651 \\
 \addlinespace
-SIGNET & 0.4924 & 0.5455 & 0.6777 & 0.5592 & 0.6367 & 0.5904 \\
-\addlinespace
 CVTGAD & 0.6308 & 0.6886 & 0.8496 & 0.9055 & 0.6696 & 0.6033 \\
 \addlinespace
-MUSE & 0.5508 & 0.5950 & -- & -- & 0.6737 & 0.5807 \\
+GLADMamba & 0.6746 & \underline{0.7325} & 0.9727 & 0.9854 & 0.7146 & 0.6450 \\
 \addlinespace
-GLADMamba & 0.6746 & \underline{0.7325} & \underline{0.9727} & \underline{0.9854} & 0.7146 & 0.6450 \\
+DHAGNN & 0.5472 & 0.6146 & 0.9771 & \underline{0.9867} & 0.7684 & 0.7079 \\
+\addlinespace
+ChiGAD & 0.6280 & 0.6401 & \underline{0.9785} & 0.9359 & 0.7666 & 0.6951 \\
 \addlinespace
 HRGCN & \underline{0.7884} & 0.7319 & \textbf{1.0000} & \textbf{1.0000} & \underline{0.8331} & \underline{0.7789} \\
 \addlinespace
@@ -36,6 +36,6 @@ HRGCN & \underline{0.7884} & 0.7319 & \textbf{1.0000} & \textbf{1.0000} & \under
 \par\vspace{2pt}
 \begin{minipage}{\textwidth}
 \scriptsize
-说明：本表由四数据集主表删除 HDFS 列得到，所有数值与主表 CSV 完全同源。粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。
+说明：所有对比方法均转换到统一的图级异常评分协议下评估。粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。
 \end{minipage}
 \end{table*}

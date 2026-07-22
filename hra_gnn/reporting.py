@@ -38,6 +38,11 @@ METHOD_ALIASES = {
     "CVTGAD-fair": "CVTGAD",
     "MUSE-fair": "MUSE",
     "GLADMamba-fair": "GLADMamba",
+    "HimNet-fair": "HimNet",
+    "GLADPro-fair": "GLADPro",
+    "MssGAD-fair": "MssGAD",
+    "DHAGNN-fair": "DHAGNN",
+    "ChiGAD-fair": "ChiGAD",
 }
 
 PREFERRED_DATASET_ORDER = ("TraceLog", "FlowGraph", "HDFS", "ADFA-LD")

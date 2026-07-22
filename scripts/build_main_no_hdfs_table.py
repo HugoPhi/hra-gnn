@@ -12,10 +12,10 @@ METHOD_ORDER = [
     "GLocalKD",
     "HGT",
     "OCHetGCN",
-    "SIGNET",
     "CVTGAD",
-    "MUSE",
     "GLADMamba",
+    "DHAGNN",
+    "ChiGAD",
     "HRGCN",
     "HRA-GNN",
 ]
@@ -60,7 +60,7 @@ def write_table(frame: pd.DataFrame, output: Path) -> None:
         r"\scriptsize",
         r"\renewcommand{\arraystretch}{0.92}",
         r"\setlength{\tabcolsep}{4pt}",
-        r"\caption{去除 HDFS 后的图异常检测主表结果（最佳运行）}",
+            r"\caption{不同模型的性能对比（最佳运行）}",
         r"\label{tab:final_auroc_ap_results_no_hdfs}",
         r"\begin{tabular}{lcccccc}",
         r"\toprule",
@@ -96,8 +96,8 @@ def write_table(frame: pd.DataFrame, output: Path) -> None:
             r"\par\vspace{2pt}",
             r"\begin{minipage}{\textwidth}",
             r"\scriptsize",
-            "说明：本表由四数据集主表删除 HDFS 列得到，所有数值与主表 CSV 完全同源。"
-            "粗体和下划线分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。",
+            "说明：所有对比方法均转换到统一的图级异常评分协议下评估。粗体和下划线"
+            "分别表示同一数据集、同一指标的最佳和次佳结果，并列最佳同时加粗。",
             r"\end{minipage}",
             r"\end{table*}",
             "",

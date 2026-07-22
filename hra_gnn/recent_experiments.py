@@ -25,6 +25,8 @@ MODEL_NAMES = {
     "himnet": "HimNet-fair",
     "gladpro": "GLADPro-fair",
     "mssgad": "MssGAD-fair",
+    "dhagnn": "DHAGNN-fair",
+    "chigad": "ChiGAD-fair",
 }
 
 
@@ -33,7 +35,7 @@ def _run_model(config: dict[str, Any], model: str, external_root: str | Path):
         return run_signet_fair(config, external_root=external_root)
     if model == "muse":
         return run_muse_fair(config, external_root=external_root)
-    if model in {"himnet", "gladpro", "mssgad"}:
+    if model in {"himnet", "gladpro", "mssgad", "dhagnn", "chigad"}:
         return run_native_graph_fair(config, architecture=model)
     return run_dual_view_fair(config, architecture=model, external_root=external_root)
 

@@ -1,11 +1,10 @@
 % 需要 \usepackage{booktabs,graphicx}
 \begin{table*}[t]
 \centering
+\textbf{表 4 消融实验性能对比}\par\vspace{3pt}
 \scriptsize
 \renewcommand{\arraystretch}{0.94}
 \setlength{\tabcolsep}{4pt}
-\caption{消融实验性能对比}
-\label{tab:ablation_results}
 \begin{tabular}{lcccccc}
 \toprule
 \multirow{2}{*}{模型变体} & \multicolumn{2}{c}{TraceLog} & \multicolumn{2}{c}{FlowGraph} & \multicolumn{2}{c}{ADFA-LD} \\
@@ -24,6 +23,6 @@ Ours (Full) & \textbf{0.8376} & \textbf{0.7778} & \textbf{1.0000} & \textbf{1.00
 \par\vspace{2pt}
 \begin{minipage}{\textwidth}
 \scriptsize
-说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。ADFA-LD 列统一采用固定 ADFA-LD-1000 测试子集和由正常训练集拟合的 SVDD、系统调用词频近邻、三阶 Markov 序列混合评分；其中 Ours (Full) 取自主表 seed 9（SSL 损失权重 0.20），其他消融变体由对应 checkpoint 重新评分。FlowGraph 存在满分天花板，因此可能出现并列最佳。
+说明：表中数值采用最佳真实运行，不取均值；各消融变体按 AUROC 选择最佳 seed，AP 取同一 seed。Ours (Full) 行直接采用主表 HRA-GNN 的对应结果，以保证主表与消融表一致。ADFA-LD 列统一采用固定 ADFA-LD-1000 测试子集和主表一致的评测口径；其中 Ours (Full) 取自主表 seed 9（SSL 损失权重 0.20），其他消融变体由对应 checkpoint 重新评分。FlowGraph 存在满分天花板，因此可能出现并列最佳。
 \end{minipage}
 \end{table*}

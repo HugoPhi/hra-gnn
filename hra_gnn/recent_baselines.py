@@ -317,7 +317,7 @@ class NativeGraphEncoder(nn.Module):
         )
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, graph) -> torch.Tensor:
+    def encode_nodes(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
         h = self.input_projection(graph.x.float()) + self.node_type_embedding(
             graph.node_type.long()
         )
@@ -335,6 +335,9 @@ class NativeGraphEncoder(nn.Module):
         batch = graph.batch
         if batch is None:
             batch = torch.zeros(h.shape[0], device=h.device, dtype=torch.long)
+        return h, batch
+
+    def pool_nodes(self, h: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         graph_count = int(batch.max().item()) + 1 if batch.numel() else 1
         mean_pool = torch.zeros(graph_count, h.shape[1], device=h.device, dtype=h.dtype)
         mean_pool.index_add_(0, batch, h)
@@ -351,6 +354,10 @@ class NativeGraphEncoder(nn.Module):
         )
         max_pool = torch.where(torch.isfinite(max_pool), max_pool, torch.zeros_like(max_pool))
         return self.output_projection(torch.cat([mean_pool, max_pool], dim=1))
+
+    def forward(self, graph) -> torch.Tensor:
+        h, batch = self.encode_nodes(graph)
+        return self.pool_nodes(h, batch)
 
 
 class HimNetNative(nn.Module):
@@ -442,6 +449,123 @@ class MssGADNative(nn.Module):
         return loss, stacked.mean(dim=1)
 
 
+class DHAGNNNative(nn.Module):
+    def __init__(self, encoder: NativeGraphEncoder) -> None:
+        super().__init__()
+        self.encoder = encoder
+        output_dim = encoder.output_projection[-1].out_features
+        hidden_dim = encoder.self_layers[-1].out_features
+        self.local_projection = nn.Sequential(
+            nn.Linear(hidden_dim, output_dim),
+            nn.ReLU(),
+            nn.Linear(output_dim, output_dim),
+        )
+        self.gate = nn.Sequential(
+            nn.Linear(output_dim * 2, output_dim),
+            nn.ReLU(),
+            nn.Linear(output_dim, 1),
+            nn.Sigmoid(),
+        )
+        self.register_buffer("global_center", torch.zeros(output_dim))
+        self.register_buffer("local_center", torch.zeros(output_dim))
+        self.register_buffer("centers_initialized", torch.tensor(False))
+
+    @torch.no_grad()
+    def initialize_centers(self, graph) -> None:
+        h, batch = self.encoder.encode_nodes(graph)
+        graph_embedding = self.encoder.pool_nodes(h, batch)
+        local_embedding = self._local_summary(h, batch)
+        self.global_center.copy_(graph_embedding.mean(dim=0))
+        self.local_center.copy_(local_embedding.mean(dim=0))
+        self.centers_initialized.fill_(True)
+
+    def _local_summary(self, h: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        local = self.local_projection(h)
+        graph_count = int(batch.max().item()) + 1 if batch.numel() else 1
+        summary = torch.full(
+            (graph_count, local.shape[1]),
+            -torch.inf,
+            device=local.device,
+            dtype=local.dtype,
+        )
+        summary.scatter_reduce_(
+            0,
+            batch[:, None].expand_as(local),
+            local,
+            reduce="amax",
+            include_self=True,
+        )
+        return torch.where(torch.isfinite(summary), summary, torch.zeros_like(summary))
+
+    def loss_and_score(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        h, batch = self.encoder.encode_nodes(graph)
+        graph_embedding = self.encoder.pool_nodes(h, batch)
+        local_embedding = self._local_summary(h, batch)
+        global_score = (graph_embedding - self.global_center).square().mean(dim=1)
+        local_score = (local_embedding - self.local_center).square().mean(dim=1)
+        gate = self.gate(torch.cat([graph_embedding, local_embedding], dim=1)).squeeze(1)
+        score = gate * local_score + (1.0 - gate) * global_score
+        compactness = 0.5 * (global_score.mean() + local_score.mean())
+        gate_balance = (gate - 0.5).square().mean()
+        return compactness + 0.02 * gate_balance, score
+
+
+class ChiGADGraphNative(nn.Module):
+    def __init__(self, encoder: NativeGraphEncoder, num_edge_types: int) -> None:
+        super().__init__()
+        self.encoder = encoder
+        output_dim = encoder.output_projection[-1].out_features
+        hidden_dim = encoder.self_layers[-1].out_features
+        self.relation_projection = nn.Sequential(
+            nn.Linear(hidden_dim, output_dim),
+            nn.ReLU(),
+            nn.Linear(output_dim, output_dim),
+        )
+        self.relation_logits = nn.Parameter(torch.zeros(num_edge_types))
+        self.register_buffer("center", torch.zeros(output_dim))
+        self.register_buffer("centers_initialized", torch.tensor(False))
+
+    @torch.no_grad()
+    def initialize_centers(self, graph) -> None:
+        embedding = self._filtered_embedding(graph)
+        self.center.copy_(embedding.mean(dim=0))
+        self.centers_initialized.fill_(True)
+
+    def _filtered_embedding(self, graph) -> torch.Tensor:
+        h, batch = self.encoder.encode_nodes(graph)
+        src, dst = graph.edge_index.long()
+        edge_type = graph.edge_type.long()
+        graph_count = int(batch.max().item()) + 1 if batch.numel() else 1
+        outputs = []
+        for relation in range(self.relation_logits.numel()):
+            mask = edge_type == relation
+            relation_nodes = torch.zeros_like(h)
+            if bool(mask.any()):
+                rel_src = src[mask]
+                rel_dst = dst[mask]
+                degree = torch.zeros(h.shape[0], 1, device=h.device, dtype=h.dtype)
+                degree.index_add_(0, rel_dst, torch.ones((rel_dst.numel(), 1), device=h.device, dtype=h.dtype))
+                centered = h[rel_src] - h[rel_dst]
+                energy = centered.square().mean(dim=1, keepdim=True)
+                chi_weight = torch.exp(-energy).clamp_min(1e-6)
+                relation_nodes.index_add_(0, rel_dst, h[rel_src] * chi_weight)
+                relation_nodes = relation_nodes / degree.clamp_min(1.0)
+            pooled = torch.zeros(graph_count, h.shape[1], device=h.device, dtype=h.dtype)
+            pooled.index_add_(0, batch, relation_nodes)
+            counts = torch.zeros(graph_count, 1, device=h.device, dtype=h.dtype)
+            counts.index_add_(0, batch, torch.ones_like(h[:, :1]))
+            outputs.append(self.relation_projection(pooled / counts.clamp_min(1.0)))
+        stacked = torch.stack(outputs, dim=1)
+        weights = torch.softmax(self.relation_logits, dim=0)
+        return (stacked * weights[None, :, None]).sum(dim=1)
+
+    def loss_and_score(self, graph) -> tuple[torch.Tensor, torch.Tensor]:
+        embedding = self._filtered_embedding(graph)
+        score = (embedding - self.center).square().mean(dim=1)
+        weight_entropy = -(torch.softmax(self.relation_logits, dim=0) * torch.log_softmax(self.relation_logits, dim=0)).sum()
+        return score.mean() - 0.001 * weight_entropy, score
+
+
 def _native_model(config: dict[str, Any], architecture: str) -> nn.Module:
     baseline = config.get("recent_baseline", {})
     encoder = NativeGraphEncoder(
@@ -463,6 +587,13 @@ def _native_model(config: dict[str, Any], architecture: str) -> nn.Module:
             spaces=int(baseline.get("spaces", 3)),
             space_dim=int(baseline.get("space_dim", 32)),
         )
+    if architecture == "dhagnn":
+        return DHAGNNNative(encoder)
+    if architecture == "chigad":
+        return ChiGADGraphNative(
+            encoder,
+            num_edge_types=int(config["dataset"]["num_edge_types"]),
+        )
     raise ValueError(f"Unsupported native graph baseline: {architecture}")
 
 
@@ -475,6 +606,8 @@ def run_native_graph_fair(
         "himnet": "HimNet",
         "gladpro": "GLADPro",
         "mssgad": "MssGAD",
+        "dhagnn": "DHAGNN",
+        "chigad": "ChiGAD",
     }
     if architecture not in names:
         raise ValueError(f"Unsupported native graph baseline: {architecture}")
@@ -500,7 +633,7 @@ def run_native_graph_fair(
     )
     batch_size = int(config["training"].get("batch_size", 32))
     epochs = int(config["training"].get("epochs", 100))
-    if isinstance(model, MssGADNative):
+    if hasattr(model, "initialize_centers"):
         init_indices = splits["train"][: min(len(splits["train"]), max(batch_size, 2))]
         model.initialize_centers(batch_graphs([graphs[index] for index in init_indices]).to(device))
     history = []

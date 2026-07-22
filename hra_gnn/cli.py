@@ -135,6 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
             "himnet",
             "gladpro",
             "mssgad",
+            "dhagnn",
+            "chigad",
         ),
     )
     fair.add_argument("--external-root", default="external")
@@ -294,7 +296,7 @@ def main() -> None:
             summary = run_signet_fair(config, external_root=arguments.external_root)
         elif arguments.model == "muse":
             summary = run_muse_fair(config, external_root=arguments.external_root)
-        elif arguments.model in {"himnet", "gladpro", "mssgad"}:
+        elif arguments.model in {"himnet", "gladpro", "mssgad", "dhagnn", "chigad"}:
             summary = run_native_graph_fair(config, architecture=arguments.model)
         else:
             summary = run_dual_view_fair(

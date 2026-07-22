@@ -1,0 +1,110 @@
+name: recent_sota_tuning_capacity
+evidence_level: recent_sota_capacity_tuning
+results_root: artifacts/results/fair_matrix
+external_root: external
+seeds: [44, 55, 66]
+
+jobs:
+  - config: ../tracelog.yaml
+    model: cvtgad
+    overrides: &dual_common
+      - training.epochs=60
+      - training.batch_size=24
+      - evaluation.batch_size=24
+      - training.learning_rate=0.0003
+      - recent_baseline.hidden_dim=32
+      - recent_baseline.num_layers=5
+      - recent_baseline.reference_graphs=128
+      - recent_baseline.max_graphs_per_split=1500
+      - recent_baseline.rw_dim=16
+      - recent_baseline.dg_dim=16
+      - recent_baseline.adaptive=1
+  - config: ../flowgraph.yaml
+    model: cvtgad
+    overrides: &dual_flowgraph
+      - training.epochs=60
+      - training.batch_size=2
+      - evaluation.batch_size=2
+      - training.learning_rate=0.0003
+      - recent_baseline.hidden_dim=32
+      - recent_baseline.num_layers=5
+      - recent_baseline.reference_graphs=32
+      - recent_baseline.max_graphs_per_split=96
+      - recent_baseline.rw_dim=16
+      - recent_baseline.dg_dim=16
+      - recent_baseline.adaptive=1
+  - config: ../adfa_ld.yaml
+    model: cvtgad
+    overrides: *dual_common
+
+  - config: ../tracelog.yaml
+    model: gladmamba
+    overrides: &mamba_common
+      - training.epochs=60
+      - training.batch_size=24
+      - evaluation.batch_size=24
+      - training.learning_rate=0.0003
+      - recent_baseline.hidden_dim=32
+      - recent_baseline.num_layers=5
+      - recent_baseline.reference_graphs=128
+      - recent_baseline.max_graphs_per_split=1500
+      - recent_baseline.rw_dim=16
+      - recent_baseline.dg_dim=16
+      - recent_baseline.d_model=64
+      - recent_baseline.d_state=4
+      - recent_baseline.adaptive=1
+  - config: ../flowgraph.yaml
+    model: gladmamba
+    overrides: &mamba_flowgraph
+      - training.epochs=60
+      - training.batch_size=2
+      - evaluation.batch_size=2
+      - training.learning_rate=0.0003
+      - recent_baseline.hidden_dim=32
+      - recent_baseline.num_layers=5
+      - recent_baseline.reference_graphs=32
+      - recent_baseline.max_graphs_per_split=96
+      - recent_baseline.rw_dim=16
+      - recent_baseline.dg_dim=16
+      - recent_baseline.d_model=64
+      - recent_baseline.d_state=4
+      - recent_baseline.adaptive=1
+  - config: ../adfa_ld.yaml
+    model: gladmamba
+    overrides: *mamba_common
+
+  - config: ../tracelog.yaml
+    model: dhagnn
+    overrides: &native_common
+      - training.epochs=60
+      - training.batch_size=32
+      - evaluation.batch_size=32
+      - training.learning_rate=0.001
+      - recent_baseline.hidden_dim=128
+      - recent_baseline.output_dim=128
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=1500
+  - config: ../flowgraph.yaml
+    model: dhagnn
+    overrides: &native_flowgraph
+      - training.epochs=60
+      - training.batch_size=16
+      - evaluation.batch_size=16
+      - training.learning_rate=0.001
+      - recent_baseline.hidden_dim=128
+      - recent_baseline.output_dim=128
+      - recent_baseline.num_layers=3
+      - recent_baseline.max_graphs_per_split=160
+  - config: ../adfa_ld.yaml
+    model: dhagnn
+    overrides: *native_common
+
+  - config: ../tracelog.yaml
+    model: chigad
+    overrides: *native_common
+  - config: ../flowgraph.yaml
+    model: chigad
+    overrides: *native_flowgraph
+  - config: ../adfa_ld.yaml
+    model: chigad
+    overrides: *native_common
